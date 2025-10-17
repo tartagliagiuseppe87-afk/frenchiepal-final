@@ -58,6 +58,18 @@ export async function handler(event, context) {
   try {
     const { message, history = [] } = JSON.parse(event.body);
 
+    // --- CORREZIONE DEFINITIVA: Intercettiamo il primo messaggio ---
+    // Se il frontend invia il segnale "INITIATE_CHAT", rispondiamo direttamente
+    // con la domanda iniziale, senza chiamare Gemini.
+    if (message === "INITIATE_CHAT") {
+        const firstQuestion = "Ciao! Sono qui per aiutarti con il tuo amico a quattro zampe 🐾. Per darti i consigli migliori, mi dici se il tuo cane è un Bulldog Francese?";
+        return {
+            statusCode: 200,
+            body: JSON.stringify({ reply: firstQuestion })
+        };
+    }
+
+    // Per tutti i messaggi successivi, procediamo normalmente con Gemini
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
@@ -74,10 +86,7 @@ export async function handler(event, context) {
       },
     });
     
-    // CORREZIONE: Gestiamo il primo messaggio in modo speciale per forzare la domanda iniziale
-    const messageToSend = (message === "INITIATE_CHAT") ? "Inizia la conversazione" : message;
-
-    const result = await chat.sendMessage(messageToSend);
+    const result = await chat.sendMessage(message);
     const responseText = await result.response.text();
 
     console.log(`USER: "${message}" | BOT: "${responseText}"`);
