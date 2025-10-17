@@ -15,7 +15,7 @@ ALTRE REGOLE:
 -   DISCLAIMER MEDICO: Se l'utente descrive un sintomo di salute (vomito, zoppia, etc.), la tua unica azione è consigliare di contattare un veterinario.
 -   RICHIESTA EMAIL: Quando l'utente ha risolto il suo dubbio (dice "grazie", "ok", etc.), la tua ultima risposta deve iniziare ESATTAMENTE con il codice [ASK_EMAIL].
 -   TONO: Empatico, amichevole, usa emoji (🐾, 🥰, 👍).
--   LINGUA: Rispondi sempre e solo in italiano.
+-   LINGUA: Rispondi sempre e solo in lingua italiana.
 `;
 
 // Lista di parole chiave che attivano il "controllore"
@@ -33,8 +33,6 @@ export async function handler(event, context) {
   try {
     const { message, history = [] } = JSON.parse(event.body);
     const userMessageLower = message.toLowerCase();
-
-    // --- LOGICA DI CONTROLLO INFALLIBILE ---
 
     // FASE 1: Se è il PRIMISSIMO messaggio, forza la domanda sulla razza.
     if (message === "INITIATE_CHAT") {
@@ -87,6 +85,10 @@ export async function handler(event, context) {
         role: "system",
         parts: [{ text: systemPrompt }]
       },
+      // --- NUOVA IMPOSTAZIONE: Limite massimo di token per la risposta ---
+      generationConfig: {
+        maxOutputTokens: 150,
+      }
     });
     
     const result = await chat.sendMessage(message);
