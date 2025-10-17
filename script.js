@@ -24,21 +24,21 @@ document.addEventListener('DOMContentLoaded', () => {
         addBotMessage("sta scrivendo...", true);
 
         try {
-            // Chiamiamo il backend con un segnale speciale e una cronologia VUOTA
+            // Chiamiamo il backend con un segnale speciale per iniziare
             const response = await fetch('/.netlify/functions/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: "INITIATE_CHAT", history: [] }),
+                body: JSON.stringify({ message: "INITIATE_CHAT" }), // Non serve più la cronologia qui
             });
 
             if (!response.ok) { throw new Error('La richiesta di avvio è fallita'); }
             const data = await response.json();
-            const botReply = data.reply; // Questa sarà la domanda: "Hai un Bulldog Francese?"
+            const botReply = data.reply; 
 
             removeTypingIndicator();
             addBotMessage(botReply);
 
-            // Ora iniziamo la cronologia con la prima vera domanda del bot
+            // Iniziamo la cronologia con la prima vera domanda del bot
             chatHistory.push({ role: 'model', text: botReply });
 
         } catch (error) {
@@ -78,8 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
             removeTypingIndicator();
             addBotMessage(botReply);
             chatHistory.push({ role: 'model', text: botReply });
-        } catch (error)
-        {
+        } catch (error) {
             console.error("Errore:", error);
             removeTypingIndicator();
             addBotMessage("Ops! Qualcosa è andato storto. Riprova tra un attimo.");
