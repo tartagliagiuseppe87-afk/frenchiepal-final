@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FrenchiePal - Il tuo amico per la cura del tuo cane</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="main-container">
+        <div id="landing-page">
+            <header>
+                <div class="hero-content">
+                    <div class="hero-text">
+                        <h1>Benvenuto in FrenchiePal! 🐾</h1>
+                        <p>
+                            Ciao! Siamo un piccolo team di appassionati, con una specializzazione e un amore enorme per i Bulldog Francesi.
+                            <br>In ogni caso, proviamo a fare del nostro meglio per aiutare i proprietari di qualsiasi razza. Per questo abbiamo creato un assistente gratuito che ti guida a risolvere i dubbi più comuni.
+                        </p>
+                        <p class="cta-text">Dai forza, che aspetti a provare? Non costa nulla!</p>
+                        <button id="start-chat-btn">💬 Avvia una chiacchierata</button>
+                    </div>
+                    <div class="hero-image">
+                        <img src="Gemini_Generated_Image_9md2049md2049md2.jpg" alt="Illustrazione di un Bulldog Francese e un altro cane felici in un prato">
+                    </div>
+                </div>
+            </header>
+            <footer>
+                <p><strong>Disclaimer Importante:</strong> FrenchiePal è un assistente virtuale e non fornisce pareri medici. Le informazioni ricevute non sostituiscono in alcun modo una consulenza veterinaria professionale. Per problemi di salute seri o emergenze, contatta immediatamente il tuo veterinario di fiducia.</p>
+            </footer>
+        </div>
+        <div id="chat-container" class="hidden">
+            <div id="chat-header">
+                <span>Chat con FrenchiePal</span>
+                <button id="close-chat-btn">&times;</button>
+            </div>
+            <div id="chat-messages"></div>
+            <div id="chat-input-area">
+                <input type="text" id="user-input" placeholder="Scrivi...">
+                <button id="send-btn">Invia</button>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
