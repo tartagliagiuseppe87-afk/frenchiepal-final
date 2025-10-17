@@ -7,11 +7,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeChatBtn = document.getElementById('close-chat-btn');
 
     let chatHistory = [];
-
+    
+    // Quando l'utente clicca per avviare la chat
     startChatBtn.addEventListener('click', () => {
         chatContainer.classList.remove('hidden');
+        // Se la chat non è mai iniziata, avvia la sequenza di benvenuto
         if (chatHistory.length === 0) {
-            sendMessage(true);
+            initiateChat();
         }
     });
 
@@ -19,22 +21,50 @@ document.addEventListener('DOMContentLoaded', () => {
         chatContainer.classList.add('hidden');
     });
 
-    sendBtn.addEventListener('click', () => sendMessage(false));
+    // Funzione dedicata solo per avviare la conversazione
+    async function initiateChat() {
+        addBotMessage("sta scrivendo...", true);
+
+        try {
+            // Chiamiamo il backend con un messaggio di avvio generico e una cronologia VUOTA
+            const response = await fetch('/.netlify/functions/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: "Ciao", history: [] }), // Il messaggio qui non è importante, la cronologia vuota sì
+            });
+
+            if (!response.ok) { throw new Error('La richiesta di avvio è fallita'); }
+            const data = await response.json();
+            const botReply = data.reply; // Questa sarà la domanda: "Hai un Bulldog Francese?"
+
+            removeTypingIndicator();
+            addBotMessage(botReply);
+
+            // Ora iniziamo la cronologia con la prima vera domanda del bot
+            chatHistory.push({ role: 'model', text: botReply });
+
+        } catch (error) {
+            console.error("Errore di avvio:", error);
+            removeTypingIndicator();
+            addBotMessage("Ops! Non riesco a connettermi. Riprova tra un attimo.");
+        }
+    }
+
+    // Listener per i messaggi successivi dell'utente
+    sendBtn.addEventListener('click', sendMessage);
     userInput.addEventListener('keypress', (event) => {
         if (event.key === 'Enter') {
             event.preventDefault();
-            sendMessage(false); 
+            sendMessage(); 
         }
     });
 
-    async function sendMessage(isInitiation = false) {
-        const messageText = isInitiation ? "Inizia la conversazione" : userInput.value.trim();
-        if (!isInitiation && messageText === '') return;
+    // Funzione per gestire tutti i messaggi DOPO il primo
+    async function sendMessage() {
+        const messageText = userInput.value.trim();
+        if (messageText === '') return;
 
-        if (!isInitiation) {
-            addUserMessage(messageText);
-        }
-
+        addUserMessage(messageText);
         chatHistory.push({ role: 'user', text: messageText });
         userInput.value = '';
         addBotMessage("sta scrivendo...", true);
@@ -57,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
             addBotMessage("Ops! Qualcosa è andato storto. Riprova tra un attimo.");
         }
     }
-
+    
     function addUserMessage(message) {
         const el = document.createElement('div');
         el.className = 'chat-message user-message';
@@ -75,7 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chatMessages.appendChild(el);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
-
+    
     function removeTypingIndicator() {
         const indicator = chatMessages.querySelector('.typing-indicator');
         if (indicator) { chatMessages.removeChild(indicator); }
