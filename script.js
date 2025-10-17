@@ -8,10 +8,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let chatHistory = [];
     
-    // Quando l'utente clicca per avviare la chat
     startChatBtn.addEventListener('click', () => {
         chatContainer.classList.remove('hidden');
-        // Se la chat non è mai iniziata, avvia la sequenza di benvenuto
         if (chatHistory.length === 0) {
             initiateChat();
         }
@@ -21,16 +19,16 @@ document.addEventListener('DOMContentLoaded', () => {
         chatContainer.classList.add('hidden');
     });
 
-    // Funzione dedicata solo per avviare la conversazione
+    // Funzione dedicata SOLO per avviare la conversazione
     async function initiateChat() {
         addBotMessage("sta scrivendo...", true);
 
         try {
-            // Chiamiamo il backend con un messaggio di avvio generico e una cronologia VUOTA
+            // Chiamiamo il backend con un segnale speciale e una cronologia VUOTA
             const response = await fetch('/.netlify/functions/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: "Ciao", history: [] }), // Il messaggio qui non è importante, la cronologia vuota sì
+                body: JSON.stringify({ message: "INITIATE_CHAT", history: [] }),
             });
 
             if (!response.ok) { throw new Error('La richiesta di avvio è fallita'); }
@@ -50,7 +48,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Listener per i messaggi successivi dell'utente
     sendBtn.addEventListener('click', sendMessage);
     userInput.addEventListener('keypress', (event) => {
         if (event.key === 'Enter') {
@@ -81,7 +78,8 @@ document.addEventListener('DOMContentLoaded', () => {
             removeTypingIndicator();
             addBotMessage(botReply);
             chatHistory.push({ role: 'model', text: botReply });
-        } catch (error) {
+        } catch (error)
+        {
             console.error("Errore:", error);
             removeTypingIndicator();
             addBotMessage("Ops! Qualcosa è andato storto. Riprova tra un attimo.");
