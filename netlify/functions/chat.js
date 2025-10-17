@@ -16,15 +16,14 @@ ALTRE REGOLE:
 -   RICHIESTA EMAIL: Quando l'utente ha risolto il suo dubbio (dice "grazie", "ok", etc.), la tua ultima risposta deve iniziare ESATTAMENTE con il codice [ASK_EMAIL].
 -   TONO: Empatico, amichevole, usa emoji (🐾, 🥰, 👍).
 -   LINGUA: Rispondi sempre e solo in italiano.
-
----
-ESEMPI DI STILE (DA SEGUIRE ALLA LETTERA):
-* NON FARE (risposta lunga e informativa): Utente: "Si chiama Enea, ha 5 anni". Bot: "Ciao Enea! Che bel nome... A quest'età è importante la salute respiratoria, la schiena..."
-* FARE (risposta breve e con domanda): Utente: "Si chiama Enea, ha 5 anni". Bot: "Ciao Enea! 🥰 Un'età splendida. C'è qualcosa in particolare che ti preoccupa o di cui vuoi parlare oggi?"
-
-* NON FARE (risposta lunga e presuntuosa): Utente: "Il mio cane ha problemi". Bot: "Mi dispiace molto sentire che il tuo cane ha dei problemi. Capisco la tua preoccupazione... la prima cosa da fare è contattare il veterinario..."
-* FARE (breve e con domanda): Utente: "Il mio cane ha problemi". Bot: "Oh no, mi dispiace. Per poterti aiutare, mi dici che tipo di problemi stai notando?"
 `;
+
+// Lista di parole chiave che attivano il "controllore"
+const problemKeywords = [
+    'problema', 'problemi', 'cacca', 'vomit', 'diarrea', 'zoppica', 'non mangia', 
+    'tosse', 'malat', 'ferit', 'sangue', 'zampa', 'occhio', 'pelo', 'prurit', 
+    'ansia', 'paura', 'aggressiv'
+];
 
 export async function handler(event, context) {
   if (event.httpMethod !== "POST") {
@@ -33,6 +32,9 @@ export async function handler(event, context) {
 
   try {
     const { message, history = [] } = JSON.parse(event.body);
+    const userMessageLower = message.toLowerCase();
+
+    // --- LOGICA DI CONTROLLO INFALLIBILE ---
 
     // FASE 1: Se è il PRIMISSIMO messaggio, forza la domanda sulla razza.
     if (message === "INITIATE_CHAT") {
@@ -45,8 +47,7 @@ export async function handler(event, context) {
 
     // FASE 2: Se è la RISPOSTA alla prima domanda, forza la risposta successiva.
     if (history.length === 2) {
-        const userResponse = message.toLowerCase();
-        if (userResponse.includes('sì') || userResponse.includes('si') || userResponse.includes('certo') || userResponse.includes('esatto')) {
+        if (userMessageLower.includes('sì') || userMessageLower.includes('si')) {
             const frenchieReply = "Fantastico! Adoro i Frenchie 🥰. Come si chiama e quanti mesi/anni ha?";
             return {
                 statusCode: 200,
@@ -61,7 +62,17 @@ export async function handler(event, context) {
         }
     }
 
-    // FASE 3: Solo ora, passiamo la palla a Gemini con le istruzioni ferree.
+    // FASE 3: IL CONTROLLORE. Se il messaggio contiene una parola chiave, rispondi con una domanda pre-programmata.
+    const hasProblemKeyword = problemKeywords.some(keyword => userMessageLower.includes(keyword));
+    if (hasProblemKeyword) {
+        const controlledQuestion = "Capisco, mi dispiace. Per poterti aiutare meglio, mi dici da quanto tempo noti questo problema e se è successo qualcos'altro di strano?";
+        return {
+            statusCode: 200,
+            body: JSON.stringify({ reply: controlledQuestion })
+        };
+    }
+
+    // FASE 4: Solo se il messaggio è "sicuro", passiamo la palla a Gemini.
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
