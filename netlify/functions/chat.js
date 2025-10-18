@@ -32,35 +32,20 @@ ESEMPI DI STILE (DA SEGUIRE ALLA LETTERA):
 * **NON FARE (risposta lunga e da enciclopedia):** "Capisco la tua preoccupazione! Si chiama coprofagia... ci sono diverse ragioni... la prima cosa da fare è escludere cause mediche..."
 `;
 
-// --- Integrazione Supabase ---
+// --- Integrazione Supabase (già corretta) ---
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 async function saveLogToSupabase(entry) {
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    console.warn("Supabase non configurato - log saltato");
-    return;
-  }
+  // ... (funzione saveLogToSupabase rimane invariata) ...
+  if (!SUPABASE_URL || !SUPABASE_KEY) { console.warn("Supabase non config."); return; }
   try {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/chat_logs`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": SUPABASE_KEY,
-        "Authorization": `Bearer ${SUPABASE_KEY}`,
-        "Prefer": "return=minimal" 
-      },
-      body: JSON.stringify(entry) 
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Errore salvataggio log Supabase:", response.status, errorText);
-    } else {
-      console.log("Log salvato su Supabase."); 
-    }
-  } catch (err) {
-    console.error("Errore fetch Supabase:", err);
-  }
+      method: "POST", headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "return=minimal" },
+      body: JSON.stringify(entry) });
+    if (!response.ok) { console.error("Errore Supabase:", response.status, await response.text()); } 
+    else { console.log("Log Supabase OK."); }
+  } catch (err) { console.error("Errore fetch Supabase:", err); }
 }
 // --- Fine Integrazione Supabase ---
 
@@ -74,41 +59,48 @@ export async function handler(event, context) {
     const userMessageLower = message.toLowerCase();
     let replyText = ""; 
 
-    // Log della history ricevuta per debug
-    console.log(`Received history length: ${history.length}, Message: ${message}`);
+    // Log per Debug Estremo
+    console.log(`HANDLER START - Received history length: ${history.length}, Message: ${message}`);
 
-    // FASE 1: Se è il PRIMISSIMO messaggio (history ricevuta è vuota).
+    // --- LOGICA INFALLIBILE A 3 FASI MANUALI ---
+
+    // FASE 1: Primo messaggio in assoluto.
     if (message === "INITIATE_CHAT") {
         replyText = "Ciao! Sono qui per aiutarti con il tuo amico a quattro zampe 🐾. Per darti i consigli migliori, mi dici se il tuo cane è un Bulldog Francese?";
+        console.log("HANDLER - FASE 1 Eseguita");
         await saveLogToSupabase({ user_id: userId, role: 'bot_init', reply: replyText });
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
 
-    // FASE 2: Se è la RISPOSTA alla prima domanda (history ricevuta ha 1 messaggio: [bot_init]).
+    // FASE 2: Risposta alla domanda sulla razza (la history ricevuta ha 1 solo messaggio).
     if (history.length === 1) { 
+        console.log("HANDLER - FASE 2 Inizio");
         if (userMessageLower.includes('sì') || userMessageLower.includes('si')) {
             replyText = "Fantastico! Adoro i Frenchie 🥰. Come si chiama e quanti mesi/anni ha?";
         } else {
             replyText = "Capito! La mia specialità sono i Bulldog Francesi, ma farò del mio meglio per aiutarti, amo tutti i cani ❤️. Come si chiama il tuo cucciolo, che razza è e quanti anni ha?";
         }
+        console.log("HANDLER - FASE 2 Eseguita");
         await saveLogToSupabase({ user_id: userId, role: 'user', message: message });
         await saveLogToSupabase({ user_id: userId, role: 'bot_intro', reply: replyText });
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
     
-    // FASE 3: Se è la RISPOSTA alla seconda domanda (history ricevuta ha 3 messaggi: [bot_init, user_reply1, bot_intro]).
+    // FASE 3: Risposta alla domanda su nome/età (la history ricevuta ha 3 messaggi).
     if (history.length === 3) { 
+        console.log("HANDLER - FASE 3 Inizio");
         replyText = "Grazie! 🥰 Ora sono pronto. Come posso aiutarti oggi con lui?";
+        console.log("HANDLER - FASE 3 Eseguita");
         await saveLogToSupabase({ user_id: userId, role: 'user', message: message });
         await saveLogToSupabase({ user_id: userId, role: 'bot_ready', reply: replyText });
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
 
     // FASE 4: Solo ora (history ricevuta ha 5 o più messaggi), passiamo la palla a Gemini.
+    console.log("HANDLER - FASE 4 (Gemini) Inizio");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    // NON serve più rimuovere messaggi dalla cronologia inviata a Gemini
     const chatHistory = history.map(item => ({
       role: item.role,
       parts: [{ text: item.text }]
@@ -123,18 +115,16 @@ export async function handler(event, context) {
     });
     
     const result = await chat.sendMessage(message);
-    replyText = await result.response.text(); // Usiamo la variabile replyText
+    replyText = await result.response.text(); 
 
     console.log(`USER_ID: ${userId} | USER: "${message}" | BOT: "${replyText}"`);
 
     await saveLogToSupabase({
-        user_id: userId,
-        role: 'conversation', 
-        message: message,
-        reply: replyText,
+        user_id: userId, role: 'conversation', message: message, reply: replyText,
         meta: { history_length: history.length } 
     });
 
+    console.log("HANDLER - FASE 4 (Gemini) Eseguita");
     return {
       statusCode: 200,
       body: JSON.stringify({ reply: replyText })
@@ -144,20 +134,10 @@ export async function handler(event, context) {
     console.error("Errore nella funzione chat:", error);
     try {
       const { userId } = JSON.parse(event.body || '{}');
-      await saveLogToSupabase({
-          user_id: userId || 'unknown',
-          role: 'error',
-          message: event.body, 
-          reply: error.message,
-          meta: { stack: error.stack }
-      });
-    } catch (logError) {
-      console.error("Errore nel salvataggio del log dell'errore:", logError);
-    }
+      await saveLogToSupabase({ user_id: userId || 'unknown', role: 'error', message: event.body, 
+          reply: error.message, meta: { stack: error.stack } });
+    } catch (logError) { console.error("Errore salvataggio log errore:", logError); }
     
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "Errore interno del server" })
-    };
+    return { statusCode: 500, body: JSON.stringify({ error: "Errore interno del server" }) };
   }
 }
