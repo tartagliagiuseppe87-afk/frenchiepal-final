@@ -27,10 +27,6 @@ ALTRE REGOLE:
 
 ---
 ESEMPI DI STILE (DA SEGUIRE ALLA LETTERA):
-* UTENTE: "Si chiama Enea, ha 5 anni"
-* **TUA RISPOSTA CORRETTA (BREVE E CON DOMANDA):** "Ciao Enea! 🥰 Un'età splendida. C'è qualcosa in particolare che ti preoccupa o di cui vuoi parlare oggi?"
-* **NON FARE (risposta lunga e informativa):** "Ciao Enea! Che bel nome... A quest'età è importante la salute respiratoria, la schiena..."
-
 * UTENTE: "ieri ha mangiato la cacca"
 * **TUA RISPOSTA CORRETTA (BREVE E CON DOMANDA):** "Capisco la preoccupazione! È successo solo ieri o è un comportamento che hai notato altre volte?"
 * **NON FARE (risposta lunga e da enciclopedia):** "Capisco la tua preoccupazione! Si chiama coprofagia... ci sono diverse ragioni... la prima cosa da fare è escludere cause mediche..."
@@ -68,7 +64,6 @@ async function saveLogToSupabase(entry) {
 }
 // --- Fine Integrazione Supabase ---
 
-
 export async function handler(event, context) {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
@@ -79,15 +74,18 @@ export async function handler(event, context) {
     const userMessageLower = message.toLowerCase();
     let replyText = ""; 
 
-    // FASE 1: Se è il PRIMISSIMO messaggio, forza la domanda sulla razza.
+    // Log della history ricevuta per debug
+    console.log(`Received history length: ${history.length}, Message: ${message}`);
+
+    // FASE 1: Se è il PRIMISSIMO messaggio (history ricevuta è vuota).
     if (message === "INITIATE_CHAT") {
         replyText = "Ciao! Sono qui per aiutarti con il tuo amico a quattro zampe 🐾. Per darti i consigli migliori, mi dici se il tuo cane è un Bulldog Francese?";
         await saveLogToSupabase({ user_id: userId, role: 'bot_init', reply: replyText });
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
 
-    // FASE 2: Se è la RISPOSTA alla prima domanda (la cronologia che arriva ha 2 messaggi: [bot_init, user_reply]), forza la risposta successiva.
-    if (history.length === 2) {
+    // FASE 2: Se è la RISPOSTA alla prima domanda (history ricevuta ha 1 messaggio: [bot_init]).
+    if (history.length === 1) { 
         if (userMessageLower.includes('sì') || userMessageLower.includes('si')) {
             replyText = "Fantastico! Adoro i Frenchie 🥰. Come si chiama e quanti mesi/anni ha?";
         } else {
@@ -98,23 +96,20 @@ export async function handler(event, context) {
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
     
-    // FASE 3: Se è la RISPOSTA alla seconda domanda (la cronologia ha 4 messaggi), forza la domanda finale di apertura.
-    if (history.length === 4) {
+    // FASE 3: Se è la RISPOSTA alla seconda domanda (history ricevuta ha 3 messaggi: [bot_init, user_reply1, bot_intro]).
+    if (history.length === 3) { 
         replyText = "Grazie! 🥰 Ora sono pronto. Come posso aiutarti oggi con lui?";
         await saveLogToSupabase({ user_id: userId, role: 'user', message: message });
         await saveLogToSupabase({ user_id: userId, role: 'bot_ready', reply: replyText });
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
 
-    // FASE 4: Solo ora, con le presentazioni finite, passiamo la palla a Gemini.
+    // FASE 4: Solo ora (history ricevuta ha 5 o più messaggi), passiamo la palla a Gemini.
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    // Rimuoviamo il primo messaggio del bot dalla cronologia inviata a Gemini,
-    // perché le istruzioni iniziali sono già gestite manualmente.
-    const relevantHistory = history.slice(1); 
-
-    const chatHistory = relevantHistory.map(item => ({
+    // NON serve più rimuovere messaggi dalla cronologia inviata a Gemini
+    const chatHistory = history.map(item => ({
       role: item.role,
       parts: [{ text: item.text }]
     }));
