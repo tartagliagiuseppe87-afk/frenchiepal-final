@@ -35,6 +35,12 @@ ESEMPIO DI FLUSSO (SE L'UTENTE INIZIA COSÌ):
 * **TUA RISPOSTA CORRETTA (BREVE E CON DOMANDA):** "Ciao Enea! 🥰 Capisco la preoccupazione. È un comportamento nuovo o lo faceva anche prima?"
 `;
 
+// --- Integrazione Supabase (Temporaneamente Disabilitata) ---
+// const SUPABASE_URL = process.env.SUPABASE_URL;
+// const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// async function saveLogToSupabase(entry) { /* ... */ }
+// --- Fine Integrazione Supabase ---
+
 // USARE 'exports.handler'
 exports.handler = async function(event, context) {
   if (event.httpMethod !== "POST") {
@@ -49,13 +55,11 @@ exports.handler = async function(event, context) {
     try {
         const body = JSON.parse(event.body || '{}');
         message = body.message || message;
-        // Assicurati che history sia sempre un array
-        history = Array.isArray(body.history) ? body.history : []; 
+        history = Array.isArray(body.history) ? body.history : [];
         userId = body.userId || userId;
     } catch (parseError) {
         console.error("Errore parsing body:", parseError);
-        // Continua comunque se possibile, o restituisci errore se critico
-        message = `Errore parsing body: ${parseError.message}`; 
+        message = `Errore parsing body: ${parseError.message}`;
     }
 
     console.log(`HANDLER START - UserID: ${userId}, History Length: ${history.length}, Message: ${message}`);
@@ -70,9 +74,8 @@ exports.handler = async function(event, context) {
 
     // Mappatura sicura della cronologia
     const chatHistory = history.map(item => ({
-      // Assicura ruoli validi, fallback a 'user' se indefinito
-      role: (item && item.role === 'model') ? 'model' : 'user', 
-      parts: [{ text: (item && item.text) ? item.text : "" }] // Assicura che 'text' esista
+      role: (item && item.role === 'model') ? 'model' : 'user', // Ruolo Corretto
+      parts: [{ text: (item && item.text) ? item.text : "" }]
     }));
 
     const chat = model.startChat({
@@ -88,13 +91,14 @@ exports.handler = async function(event, context) {
 
     // Passiamo il messaggio dell'utente direttamente a Gemini
     const result = await chat.sendMessage(message);
-    const response = await result.response; // Gestione corretta della Promise
+    const response = await result.response;
     const replyText = await response.text();
 
     console.log(`USER_ID: ${userId} | USER: "${message}" | BOT: "${replyText}"`);
 
     // --- Supabase Disabilitato ---
     // console.log("Salvataggio Supabase saltato.");
+    // await saveLogToSupabase({ /* ... */ });
 
     return {
       statusCode: 200,
@@ -103,5 +107,25 @@ exports.handler = async function(event, context) {
 
   } catch (error) {
     console.error("ERRORE GENERALE nella funzione chat:", error);
-    // Log dell'errore su Vercel/Netlify
     console.error(`ERROR DETAILS: ${error.message}, STACK: ${error.stack}`);
+    // Non provare a loggare su Supabase qui per evitare loop di errori
+
+    return { statusCode: 500, body: JSON.stringify({ error: `Errore interno del server: ${error.message}` }) };
+  }
+}
+
+// Implementazione di saveLogToSupabase (anche se commentata sopra)
+/*
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+async function saveLogToSupabase(entry) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) { console.warn("Supabase non config."); return; }
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/chat_logs`, {
+      method: "POST", headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "return=minimal" },
+      body: JSON.stringify(entry) });
+    if (!response.ok) { console.error("Errore Supabase:", response.status, await response.text()); }
+    else { console.log("Log Supabase OK."); }
+  } catch (err) { console.error("Errore fetch Supabase:", err); }
+}
+*/
