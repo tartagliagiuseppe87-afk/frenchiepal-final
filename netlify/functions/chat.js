@@ -1,117 +1,130 @@
 // USARE 'require' INVECE DI 'import'
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
+// Fetch è globale in Node.js >= 18 (usato da Netlify), non serve importarlo.
+
 const systemPrompt = `
-**REGOLA FONDAMENTALE ASSOLUTA: DEVI RISPONDERE SEMPRE E SOLO IN LINGUA ITALIANA.**
+---
+PERSONA E CONTESTO:
+Sei 'FrenchiePal', un assistente virtuale e un grande appassionato di Bulldog Francesi. La conversazione è già iniziata e l'utente ti ha già fornito le informazioni di base sul suo cane (razza, nome, età), che si trovano nella cronologia della chat. Il tuo compito è continuare la conversazione da questo punto in poi.
+
+Se il cane è un Bulldog Francese, agisci come 'FrenchieFriend', l'amico super esperto. Se è un'altra razza, agisci come un assistente generale che ama tutti i cani.
 
 ---
-PERSONA E RUOLO:
-Sei 'FrenchiePal', un assistente virtuale amichevole, empatico e appassionato di Bulldog Francesi, che parla **SOLO ITALIANO**. Il tuo comportamento cambia in base alla razza del cane dell'utente.
+OBIETTIVO PRINCIPALE:
+Il tuo unico scopo è aiutare l'utente a esplorare il suo problema facendogli domande progressive e molto brevi, usando la tua conoscenza del contesto per fare domande pertinenti.
 
 ---
-FLUSSO DI CONVERSAZIONE OBBLIGATORIO E RIGIDO:
-
-1.  **CONTROLLO PRIMA INTERAZIONE:**
-    * Guarda la cronologia (`history`). Se è **vuota** o contiene solo il **primissimo messaggio dell'utente**: la tua UNICA risposta possibile DEVE essere ESATTAMENTE: "Ciao! Sono qui per aiutarti con il tuo amico a quattro zampe 🐾. Per darti i consigli migliori, mi dici se il tuo cane è un Bulldog Francese?". **IGNORA completamente il contenuto del primo messaggio dell'utente**, la tua priorità è fare questa domanda.
-
-2.  **CONTROLLO SECONDA INTERAZIONE (DOPO LA RISPOSTA SULLA RAZZA):**
-    * Se la cronologia contiene la tua domanda sulla razza e la risposta dell'utente:
-        * Se l'utente ha risposto SÌ (o simile): La tua UNICA risposta deve essere ESATTAMENTE: "Fantastico! Adoro i Frenchie 🥰. Come si chiama e quanti mesi/anni ha?". Non aggiungere altro.
-        * Se l'utente ha risposto NO (o ha nominato un'altra razza): La tua UNICA risposta deve essere ESATTAMENTE: "Capito! La mia specialità sono i Bulldog Francesi, ma farò del mio meglio per aiutarti, amo tutti i cani ❤️. Come si chiama il tuo cucciolo, che razza è e quanti anni ha?". Non aggiungere altro.
-
-3.  **CONTROLLO TERZA INTERAZIONE (DOPO LA RISPOSTA SU NOME/ETÀ):**
-    * Se la cronologia contiene la tua domanda su nome/età e la risposta dell'utente: La tua UNICA risposta deve essere ESATTAMENTE: "Grazie! 🥰 Ora sono pronto. Come posso aiutarti oggi con lui?". Non aggiungere altro.
-
-4.  **DALLA QUARTA INTERAZIONE IN POI:**
-    * Ora inizia la conversazione vera. Leggi la cronologia per capire il contesto (razza, nome, età). Il tuo unico scopo è aiutare l'utente a esplorare il suo problema facendogli domande progressive e molto brevi (massimo 1-2 frasi). Ogni tua risposta DEVE terminare con una domanda. NON fornire spiegazioni lunghe, liste o consigli non richiesti.
+REGOLE ASSOLUTE E FONDAMENTALI (DA NON VIOLARE MAI):
+1.  **MASSIMA BREVITÀ:** Questa è la regola più importante. Le tue risposte devono essere ESTREMAMENTE brevi, idealmente una frase, massimo due. È un ordine, non un suggerimento.
+2.  **FAI SEMPRE UNA DOMANDA:** Ogni tua risposta DEVE terminare con una domanda per continuare la conversazione. Non fornire mai soluzioni o spiegazioni lunghe. Il tuo unico scopo è fare domande per approfondire.
+3.  **NON ESSERE UN'ENCICLOPEDIA:** Non elencare mai problemi comuni o caratteristiche della razza a meno che l'utente non ti chieda specificamente "quali sono i problemi comuni?". Il tuo unico ruolo è fare domande brevi.
 
 ---
-REGOLE GENERALI SEMPRE VALIDE (DA RISPETTARE SCRUPOLOSAMENTE):
--   **MASSIMA BREVITÀ:** Sempre risposte brevissime (1-2 frasi). È un ordine tassativo.
--   **FAI SEMPRE DOMANDE (dalla 4a interazione in poi):** Non dare risposte definitive, ma chiedi dettagli.
--   **NON ESSERE UN'ENCICLOPEDIA:** Mai listare problemi o caratteristiche se non richiesto esplicitamente dall'utente.
--   **DISCLAIMER MEDICO:** Per sintomi chiari (vomito, zoppia), consiglia BREVEMENTE di vedere un veterinario e chiedi se c'è altro.
--   **RICHIESTA EMAIL:** Se l'utente dice "grazie", "ok", etc. alla fine, la tua ultima risposta inizia con [ASK_EMAIL].
--   **NEUTRALITÀ:** Non raccomandare marche.
+ALTRE REGOLE:
+-   **DISCLAIMER MEDICO:** Se l'utente descrive un sintomo di salute chiaro (vomito, zoppia, etc.), la tua unica azione è consigliare brevemente e direttamente di contattare un veterinario.
+-   **RICHIESTA EMAIL:** Quando l'utente sembra soddisfatto e la conversazione è finita (dice "grazie", "ok", etc.), la tua ultima risposta deve iniziare ESATTAMENTE con il codice [ASK_EMAIL].
+-   **NEUTRALITÀ SUI PRODOTTI:** Non raccomandare mai marche specifiche di cibo, accessori o altri prodotti.
 -   **TONO:** Empatico, amichevole, usa emoji (🐾, 🥰, 👍).
--   **LINGUA: SEMPRE E SOLO ITALIANO.**
-`; // Assicurati di incollare qui il tuo prompt completo!
+-   **LINGUA:** Rispondi sempre e solo in lingua italiana.
 
-// --- Integrazione Supabase (Temporaneamente Rimossa per Stabilità) ---
-// const SUPABASE_URL = process.env.SUPABASE_URL;
-// const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-// async function saveLogToSupabase(entry) { /* ... */ }
+---
+ESEMPI DI STILE (DA SEGUIRE ALLA LETTERA):
+* UTENTE: "ieri ha mangiato la cacca"
+* **TUA RISPOSTA CORRETTA (BREVE E CON DOMANDA):** "Capisco la preoccupazione! È successo solo ieri o è un comportamento che hai notato altre volte?"
+* **NON FARE (risposta lunga e da enciclopedia):** "Capisco la tua preoccupazione! Si chiama coprofagia... ci sono diverse ragioni... la prima cosa da fare è escludere cause mediche..."
+`;
+
+// --- Integrazione Supabase ---
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+async function saveLogToSupabase(entry) {
+  // Assicurati che questa funzione sia sintatticamente corretta
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.warn("Supabase non configurato - log saltato");
+    return;
+  }
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/chat_logs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "Prefer": "return=minimal"
+      },
+      body: JSON.stringify(entry)
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Errore salvataggio log Supabase:", response.status, errorText);
+    } else {
+      console.log("Log salvato su Supabase.");
+    }
+  } catch (err) {
+    console.error("Errore fetch Supabase:", err);
+  }
+}
 // --- Fine Integrazione Supabase ---
 
-// USARE 'exports.handler' INVECE DI 'export async function handler'
+// USARE 'exports.handler'
 exports.handler = async function(event, context) {
+  // Assicurati che non ci siano dichiarazioni o codice prima di questo punto nel blocco try
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
   }
 
   try {
-    const { message, history = [], userId } = JSON.parse(event.body);
-    const userMessageLower = message.toLowerCase();
-    let replyText = ""; 
+    // Assicurati che il parsing e l'assegnazione siano corretti
+    const { message, history = [], userId } = JSON.parse(event.body || '{}'); // Aggiunto fallback per body vuoto
+    const userMessageLower = message ? message.toLowerCase() : ""; // Gestisci message undefined
+    let replyText = "";
 
     console.log(`HANDLER START - Received history length: ${history.length}, Message: ${message}`);
-
-    // --- LOGICA INFALLIBILE BASATA SU HISTORY.LENGTH CORRETTA ---
 
     // FASE 1: Primo messaggio
     if (message === "INITIATE_CHAT") {
         replyText = "Ciao! Sono qui per aiutarti con il tuo amico a quattro zampe 🐾. Per darti i consigli migliori, mi dici se il tuo cane è un Bulldog Francese?";
         console.log("HANDLER - FASE 1 Eseguita");
-        // await saveLogToSupabase({ user_id: userId, role: 'bot_init', reply: replyText });
+        await saveLogToSupabase({ user_id: userId, role: 'bot_init', reply: replyText });
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
 
-    // FASE 2: Risposta alla prima domanda
-    if (history.length === 1) { 
+    // FASE 2: Risposta alla prima domanda (history.length === 1)
+    if (history && history.length === 1) { // Aggiunto controllo 'history &&' per sicurezza
         console.log("HANDLER - FASE 2 Inizio");
-        if (userMessageLower.includes('si') || userMessageLower.includes('certo') || userMessageLower.includes('esatto') || userMessageLower === 'ok') { // Controllo Semplificato
+        if (userMessageLower.includes('si') || userMessageLower.includes('certo') || userMessageLower.includes('esatto') || userMessageLower === 'ok') {
             replyText = "Fantastico! Adoro i Frenchie 🥰. Come si chiama e quanti mesi/anni ha?";
         } else {
             replyText = "Capito! La mia specialità sono i Bulldog Francesi, ma farò del mio meglio per aiutarti, amo tutti i cani ❤️. Come si chiama il tuo cucciolo, che razza è e quanti anni ha?";
         }
         console.log("HANDLER - FASE 2 Eseguita");
-        // await saveLogToSupabase({ user_id: userId, role: 'user', message: message });
-        // await saveLogToSupabase({ user_id: userId, role: 'bot_intro', reply: replyText });
+        await saveLogToSupabase({ user_id: userId, role: 'user', message: message });
+        await saveLogToSupabase({ user_id: userId, role: 'bot_intro', reply: replyText });
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
-    
-    // FASE 3: Risposta alla seconda domanda
-    if (history.length === 3) { 
+
+    // FASE 3: Risposta alla seconda domanda (history.length === 3)
+    if (history && history.length === 3) { // Aggiunto controllo 'history &&'
         console.log("HANDLER - FASE 3 Inizio");
         replyText = "Grazie! 🥰 Ora sono pronto. Come posso aiutarti oggi con lui?";
         console.log("HANDLER - FASE 3 Eseguita");
-        // await saveLogToSupabase({ user_id: userId, role: 'user', message: message });
-        // await saveLogToSupabase({ user_id: userId, role: 'bot_ready', reply: replyText });
+        await saveLogToSupabase({ user_id: userId, role: 'user', message: message });
+        await saveLogToSupabase({ user_id: userId, role: 'bot_ready', reply: replyText });
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
 
-    // FASE 4: Passiamo la palla a Gemini.
+    // FASE 4: Passiamo la palla a Gemini (history.length >= 5)
     console.log("HANDLER - FASE 4 (Gemini) Inizio");
-    
-    // --- PUNTO CRITICO: INIZIALIZZAZIONE GEMINI ---
-    let genAI;
-    try {
-        console.log("Tentativo di inizializzare GoogleGenerativeAI...");
-        if (!process.env.GEMINI_API_KEY) {
-            throw new Error("GEMINI_API_KEY non trovata nelle variabili d'ambiente!");
-        }
-        genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        console.log("GoogleGenerativeAI inizializzato con successo.");
-    } catch (initError) {
-        console.error("ERRORE CRITICO durante inizializzazione GoogleGenerativeAI:", initError);
-        throw initError; // Rilancia l'errore per farlo catturare dal blocco catch esterno
+    if (!process.env.GEMINI_API_KEY) {
+        throw new Error("GEMINI_API_KEY non definita!"); // Controllo esplicito
     }
-    // --- FINE PUNTO CRITICO ---
-
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const chatHistory = history.map(item => ({
-      role: item.role === 'model' ? 'assistant' : 'user', 
+      role: item.role === 'model' ? 'assistant' : 'user',
       parts: [{ text: item.text }]
     }));
 
@@ -122,13 +135,16 @@ exports.handler = async function(event, context) {
         parts: [{ text: systemPrompt }]
       },
     });
-    
+
     const result = await chat.sendMessage(message);
-    replyText = await result.response.text(); 
+    replyText = await result.response.text();
 
     console.log(`USER_ID: ${userId} | USER: "${message}" | BOT: "${replyText}"`);
 
-    // await saveLogToSupabase({ /* ... */ }); // Temporaneamente disabilitato
+    await saveLogToSupabase({
+        user_id: userId, role: 'conversation', message: message, reply: replyText,
+        meta: { history_length: history.length }
+    });
 
     console.log("HANDLER - FASE 4 (Gemini) Eseguita");
     return {
@@ -137,9 +153,14 @@ exports.handler = async function(event, context) {
     };
 
   } catch (error) {
-    console.error("ERRORE GENERALE nella funzione chat:", error); // Log errore generale
-    // Tentativo di log errore su Supabase (disabilitato)
-    
+    console.error("ERRORE GENERALE nella funzione chat:", error);
+    try {
+      // Tentativo di loggare l'errore senza fare affidamento sul body originale se il parsing è fallito
+      const safeUserId = event.body ? (JSON.parse(event.body || '{}')).userId : 'unknown_parse_fail';
+      await saveLogToSupabase({ user_id: safeUserId || 'unknown', role: 'error', message: event.body || 'Body non parsabile',
+          reply: error.message, meta: { stack: error.stack } });
+    } catch (logError) { console.error("Errore salvataggio log errore:", logError); }
+
     return { statusCode: 500, body: JSON.stringify({ error: "Errore interno del server" }) };
   }
 }
