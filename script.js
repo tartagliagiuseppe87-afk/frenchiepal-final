@@ -7,36 +7,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeChatBtn = document.getElementById('close-chat-btn');
 
     let chatHistory = [];
+    const userId = getUserId(); // Assumendo che la funzione getUserId sia ancora presente
 
-    // --- AVVIO CHAT ---
-    startChatBtn.addEventListener('click', async () => {
-        chatContainer.classList.remove('hidden');
-        if (chatMessages.children.length === 0) {
-            addBotMessage("sta scrivendo...", true);
-            try {
-                // Invia il segnale INITIATE_CHAT al backend REALE
-                const response = await fetch('/.netlify/functions/chat', { // <-- CHIAMA IL BACKEND
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: "INITIATE_CHAT", history: [] })
-                });
-                if (!response.ok) throw new Error('La richiesta di avvio è fallita');
-                const data = await response.json();
-                removeTypingIndicator();
-                addBotMessage(data.reply); // Mostra la risposta REALE
-                chatHistory.push({ role: 'model', text: data.reply });
-            } catch (error) {
-                console.error("Errore di avvio:", error);
-                removeTypingIndicator();
-                addBotMessage("Ops! Non riesco a connettermi. Riprova tra un attimo.");
-            }
+    function getUserId() {
+        let userId = localStorage.getItem('frenchiepal_user_id');
+        if (!userId) {
+            userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            localStorage.setItem('frenchiepal_user_id', userId);
         }
+        return userId;
+    }
+
+    // --- AVVIO CHAT SEMPLIFICATO ---
+    startChatBtn.addEventListener('click', () => {
+        chatContainer.classList.remove('hidden');
+        // Non fa nient'altro, aspetta l'utente
+        userInput.focus(); // Mette il cursore pronto per scrivere
     });
 
     closeChatBtn.addEventListener('click', () => {
         chatContainer.classList.add('hidden');
     });
 
+    // Invia messaggio (gestisce sia il primo che i successivi)
     sendBtn.addEventListener('click', sendMessage);
     userInput.addEventListener('keypress', (event) => {
         if (event.key === 'Enter') {
@@ -56,18 +49,18 @@ document.addEventListener('DOMContentLoaded', () => {
         addBotMessage("sta scrivendo...", true);
 
         try {
-            // CHIAMA IL BACKEND REALE con il messaggio e la cronologia
-            const response = await fetch('/.netlify/functions/chat', { // <-- CHIAMA IL BACKEND
+            // Chiama il backend con il messaggio e la cronologia (che sarà vuota la prima volta)
+            const response = await fetch('/.netlify/functions/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: messageText, history: chatHistory }),
+                body: JSON.stringify({ message: messageText, history: chatHistory, userId: userId }),
             });
 
             if (!response.ok) throw new Error('La richiesta al bot è fallita');
 
             const data = await response.json();
             removeTypingIndicator();
-            addBotMessage(data.reply); // Mostra la risposta REALE
+            addBotMessage(data.reply);
             chatHistory.push({ role: 'model', text: data.reply });
 
         } catch (error) {
@@ -77,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Funzioni helper (rimangono invariate)
     function addUserMessage(message) {
         const el = document.createElement('div');
         el.className = 'chat-message user-message';
@@ -87,7 +81,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function addBotMessage(message, isTyping = false) {
         message = message.replace('[ASK_EMAIL]', '').trim();
-
         const el = document.createElement('div');
         el.className = 'chat-message bot-message';
         el.textContent = message;
