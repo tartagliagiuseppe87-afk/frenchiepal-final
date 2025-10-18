@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeChatBtn = document.getElementById('close-chat-btn');
 
     let chatHistory = [];
-    const userId = getUserId(); // Assumendo che la funzione getUserId sia ancora presente
+    const userId = getUserId(); 
 
     function getUserId() {
         let userId = localStorage.getItem('frenchiepal_user_id');
@@ -18,11 +18,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return userId;
     }
 
-    // --- AVVIO CHAT SEMPLIFICATO ---
+    // --- AVVIO CHAT SEMPLIFICATO: ASPETTA L'UTENTE ---
     startChatBtn.addEventListener('click', () => {
         chatContainer.classList.remove('hidden');
-        // Non fa nient'altro, aspetta l'utente
-        userInput.focus(); // Mette il cursore pronto per scrivere
+        userInput.focus(); // Mette il focus sull'input
     });
 
     closeChatBtn.addEventListener('click', () => {
@@ -43,19 +42,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (messageText === '') return;
 
         addUserMessage(messageText);
-        // Aggiungi il messaggio utente alla cronologia PRIMA di inviare
-        chatHistory.push({ role: 'user', text: messageText });
+        // Aggiungi alla cronologia PRIMA di inviare
+        chatHistory.push({ role: 'user', text: messageText }); 
         userInput.value = '';
 
         addBotMessage("sta scrivendo...", true);
 
         try {
-            // Chiama il backend con il messaggio e la cronologia (che sarà vuota la prima volta)
+            // Chiama il backend con il messaggio e la cronologia (vuota la prima volta DOPO il msg utente)
             const response = await fetch('/.netlify/functions/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 // Invia la cronologia AGGIORNATA che include l'ultimo messaggio utente
-                body: JSON.stringify({ message: messageText, history: chatHistory, userId: userId }),
+                body: JSON.stringify({ message: messageText, history: chatHistory, userId: userId }), 
             });
 
             if (!response.ok) throw new Error('La richiesta al bot è fallita');
@@ -64,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
             removeTypingIndicator();
             addBotMessage(data.reply);
             // Aggiungi la risposta del bot alla cronologia
-            chatHistory.push({ role: 'model', text: data.reply });
+            chatHistory.push({ role: 'model', text: data.reply }); 
 
         } catch (error) {
             console.error("Errore:", error);
@@ -74,6 +73,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Funzioni helper (rimangono invariate)
+    function addUserMessage(message) { /* ... */ }
+    function addBotMessage(message, isTyping = false) { /* ... */ }
+    function removeTypingIndicator() { /* ... */ }
+
+    // Implementazione funzioni helper
     function addUserMessage(message) {
         const el = document.createElement('div');
         el.className = 'chat-message user-message';
@@ -81,7 +85,6 @@ document.addEventListener('DOMContentLoaded', () => {
         chatMessages.appendChild(el);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
-
     function addBotMessage(message, isTyping = false) {
         message = message.replace('[ASK_EMAIL]', '').trim();
         const el = document.createElement('div');
@@ -91,7 +94,6 @@ document.addEventListener('DOMContentLoaded', () => {
         chatMessages.appendChild(el);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
-
     function removeTypingIndicator() {
         const indicator = chatMessages.querySelector('.typing-indicator');
         if (indicator) chatMessages.removeChild(indicator);
