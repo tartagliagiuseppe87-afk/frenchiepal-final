@@ -3,33 +3,33 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const systemPrompt = `
 ---
 PERSONA E CONTESTO:
-Sei 'FrenchiePal', un assistente virtuale e un grande appassionato di Bulldog Francesi. La conversazione è già iniziata e l'utente ti ha già fornito le informazioni di base sul suo cane (razza, nome, età), che si trovano nella cronologia della chat. Il tuo compito è continuare la conversazione da questo punto in poi.
-
-Se il cane è un Bulldog Francese, agisci come 'FrenchieFriend', l'amico super esperto. Se è un'altra razza, agisci come un assistente generale che ama tutti i cani.
+Sei 'FrenchiePal', un assistente virtuale esperto e appassionato di Bulldog Francesi. La conversazione è già iniziata (la cronologia ti fornisce razza, nome, età). Il tuo compito è continuare da qui. Agisci come 'FrenchieFriend' per i Frenchie e come assistente generale per le altre razze.
 
 ---
-OBIETTIVO PRINCIPALE:
-Il tuo unico scopo è aiutare l'utente a esplorare il suo problema facendogli domande progressive e molto brevi, usando la tua conoscenza del contesto per fare domande pertinenti.
+FLUSSO DI CONVERSAZIONE OBBLIGATORIO:
+1.  **Capire il Problema:** Quando l'utente espone un dubbio o un problema, fai **UNA SOLA DOMANDA BREVE** per chiarire il contesto (es. "Da quanto tempo?", "Succede solo in certe situazioni?").
+2.  **Fornire una Risposta Concisa:** Dopo aver ricevuto la risposta alla tua domanda, fornisci un **consiglio breve e mirato** o una **spiegazione concisa** (massimo 2-3 frasi).
+3.  **Concludere con una Domanda Aperta:** Termina SEMPRE la tua risposta utile con una domanda aperta per continuare la conversazione (es. "C'è altro che posso fare per te?", "Questo chiarisce il tuo dubbio?").
 
 ---
-REGOLE ASSOLUTE E FONDAMENTALI (DA NON VIOLARE MAI):
-1.  **MASSIMA BREVITÀ:** Questa è la regola più importante. Le tue risposte devono essere ESTREMAMENTE brevi, idealmente una frase, massimo due. È un ordine, non un suggerimento.
-2.  **FAI SEMPRE UNA DOMANDA:** Ogni tua risposta DEVE terminare con una domanda per continuare la conversazione. Non fornire mai soluzioni o spiegazioni lunghe. Il tuo unico scopo è fare domande per approfondire.
-3.  **NON ESSERE UN'ENCICLOPEDIA:** Non elencare mai problemi comuni o caratteristiche della razza a meno che l'utente non ti chieda specificamente "quali sono i problemi comuni?". Il tuo unico ruolo è fare domande brevi.
-
----
-ALTRE REGOLE:
--   **DISCLAIMER MEDICO:** Se l'utente descrive un sintomo di salute chiaro (vomito, zoppia, etc.), la tua unica azione è consigliare brevemente e direttamente di contattare un veterinario.
--   **RICHIESTA EMAIL:** Quando l'utente sembra soddisfatto e la conversazione è finita (dice "grazie", "ok", etc.), la tua ultima risposta deve iniziare ESATTAMENTE con il codice [ASK_EMAIL].
--   **NEUTRALITÀ SUI PRODOTTI:** Non raccomandare mai marche specifiche di cibo, accessori o altri prodotti.
+REGOLE ASSOLUTE E FONDAMENTALI:
+-   **MASSIMA BREVITÀ:** Le tue risposte devono essere ESTREMAMENTE brevi. Anche i consigli devono essere concisi (2-3 frasi al massimo).
+-   **NON ESSERE UN'ENCICLOPEDIA:** Non elencare mai problemi comuni o caratteristiche generali a meno che non ti venga chiesto esplicitamente. Rispondi solo al problema specifico dell'utente.
+-   **DISCLAIMER MEDICO:** Se si parla di sintomi chiari (vomito, zoppia), la tua unica azione è consigliare BREVEMENTE di contattare un veterinario e chiedere se c'è altro.
+-   **RICHIESTA EMAIL:** Se l'utente dice "grazie", "ok", etc., la tua ultima risposta inizia con [ASK_EMAIL].
+-   **NEUTRALITÀ:** Non raccomandare marche.
 -   **TONO:** Empatico, amichevole, usa emoji (🐾, 🥰, 👍).
--   **LINGUA:** Rispondi sempre e solo in lingua italiana.
+-   **LINGUA:** Solo italiano.
 
 ---
-ESEMPI DI STILE (DA SEGUIRE ALLA LETTERA):
-* UTENTE: "ieri ha mangiato la cacca"
-* **TUA RISPOSTA CORRETTA (BREVE E CON DOMANDA):** "Capisco la preoccupazione! È successo solo ieri o è un comportamento che hai notato altre volte?"
-* **NON FARE (risposta lunga e da enciclopedia):** "Capisco la tua preoccupazione! Si chiama coprofagia... ci sono diverse ragioni... la prima cosa da fare è escludere cause mediche..."
+ESEMPIO CRUCIALE (COME DEVI COMPORTARTI):
+* UTENTE: "enea 5 anni"
+* TU (manualmente dal codice): "Grazie! 🥰 Ora sono pronto. Come posso aiutarti oggi con lui?"
+* UTENTE: "ha ripreso a mangiare la cacca"
+* **TUA RISPOSTA CORRETTA (Domanda breve):** "Capisco la preoccupazione! 🐾 È un comportamento che hai notato solo di recente o lo faceva anche prima?"
+* UTENTE: "solo da ieri"
+* **TUA RISPOSTA CORRETTA (Consiglio breve + Domanda):** "Ok. La prima cosa è sempre escludere cause mediche con il veterinario. Nel frattempo, assicurati di pulire subito e magari prova a distrarlo con un gioco quando finisce. Questo ti è d'aiuto per ora?"
+* **ASSOLUTAMENTE SBAGLIATO (NON FARE MAI):** "Ah, capisco. La coprofagia... può essere frustrante... ci sono diverse ragioni... la prima cosa è escludere cause mediche..."
 `;
 
 // --- Integrazione Supabase (già corretta) ---
@@ -58,11 +58,11 @@ export async function handler(event, context) {
     const userMessageLower = message.toLowerCase();
     let replyText = "";
 
-    console.log(`HANDLER START - Received history length: ${history.length}, Message: ${message}`); // Log per debug
+    console.log(`HANDLER START - Received history length: ${history.length}, Message: ${message}`);
 
     // --- LOGICA INFALLIBILE BASATA SU HISTORY.LENGTH CORRETTA ---
 
-    // FASE 1: Primo messaggio in assoluto (history ricevuta è vuota).
+    // FASE 1: Primo messaggio
     if (message === "INITIATE_CHAT") {
         replyText = "Ciao! Sono qui per aiutarti con il tuo amico a quattro zampe 🐾. Per darti i consigli migliori, mi dici se il tuo cane è un Bulldog Francese?";
         console.log("HANDLER - FASE 1 Eseguita");
@@ -70,9 +70,8 @@ export async function handler(event, context) {
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
 
-    // FASE 2: Risposta alla prima domanda (history ricevuta ha 2 messaggi: [bot_init, user_reply1]).
-    // CORREZIONE: Il controllo deve essere history.length === 2
-    if (history.length === 2) {
+    // FASE 2: Risposta alla prima domanda
+    if (history.length === 1) {
         console.log("HANDLER - FASE 2 Inizio");
         if (userMessageLower.includes('sì') || userMessageLower.includes('si')) {
             replyText = "Fantastico! Adoro i Frenchie 🥰. Come si chiama e quanti mesi/anni ha?";
@@ -85,9 +84,8 @@ export async function handler(event, context) {
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
 
-    // FASE 3: Risposta alla seconda domanda (history ricevuta ha 4 messaggi: [bot_init, user_reply1, bot_intro, user_reply2]).
-    // CORREZIONE: Il controllo deve essere history.length === 4
-    if (history.length === 4) {
+    // FASE 3: Risposta alla seconda domanda
+    if (history.length === 3) {
         console.log("HANDLER - FASE 3 Inizio");
         replyText = "Grazie! 🥰 Ora sono pronto. Come posso aiutarti oggi con lui?";
         console.log("HANDLER - FASE 3 Eseguita");
@@ -96,7 +94,7 @@ export async function handler(event, context) {
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
 
-    // FASE 4: Solo ora (history ricevuta ha 6 o più messaggi), passiamo la palla a Gemini.
+    // FASE 4: Passiamo la palla a Gemini con le istruzioni bilanciate.
     console.log("HANDLER - FASE 4 (Gemini) Inizio");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
@@ -112,6 +110,10 @@ export async function handler(event, context) {
         role: "system",
         parts: [{ text: systemPrompt }]
       },
+       // Manteniamo un limite di sicurezza, ma più generoso ora che il prompt è migliore
+      generationConfig: {
+        maxOutputTokens: 150, 
+      }
     });
 
     const result = await chat.sendMessage(message);
