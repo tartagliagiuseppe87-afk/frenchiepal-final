@@ -7,11 +7,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeChatBtn = document.getElementById('close-chat-btn');
 
     let chatHistory = [];
-    
-    startChatBtn.addEventListener('click', () => {
+
+    // --- AVVIO CHAT ---
+    startChatBtn.addEventListener('click', async () => {
         chatContainer.classList.remove('hidden');
-        if (chatHistory.length === 0) {
-            initiateChat();
+        if (chatMessages.children.length === 0) {
+            addBotMessage("sta scrivendo...", true);
+            try {
+                // Invia il segnale INITIATE_CHAT al backend
+                const response = await fetch('/.netlify/functions/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: "INITIATE_CHAT", history: [] })
+                });
+                if (!response.ok) throw new Error('La richiesta di avvio è fallita');
+                const data = await response.json();
+                removeTypingIndicator();
+                addBotMessage(data.reply);
+                chatHistory.push({ role: 'model', text: data.reply });
+            } catch (error) {
+                console.error("Errore di avvio:", error);
+                removeTypingIndicator();
+                addBotMessage("Ops! Non riesco a connettermi. Riprova tra un attimo.");
+            }
         }
     });
 
@@ -19,44 +37,14 @@ document.addEventListener('DOMContentLoaded', () => {
         chatContainer.classList.add('hidden');
     });
 
-    // Funzione dedicata SOLO per avviare la conversazione
-    async function initiateChat() {
-        addBotMessage("sta scrivendo...", true);
-
-        try {
-            // Chiamiamo il backend con un segnale speciale per iniziare
-            const response = await fetch('/.netlify/functions/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: "INITIATE_CHAT" }), // Non serve più la cronologia qui
-            });
-
-            if (!response.ok) { throw new Error('La richiesta di avvio è fallita'); }
-            const data = await response.json();
-            const botReply = data.reply; 
-
-            removeTypingIndicator();
-            addBotMessage(botReply);
-
-            // Iniziamo la cronologia con la prima vera domanda del bot
-            chatHistory.push({ role: 'model', text: botReply });
-
-        } catch (error) {
-            console.error("Errore di avvio:", error);
-            removeTypingIndicator();
-            addBotMessage("Ops! Non riesco a connettermi. Riprova tra un attimo.");
-        }
-    }
-
     sendBtn.addEventListener('click', sendMessage);
     userInput.addEventListener('keypress', (event) => {
         if (event.key === 'Enter') {
             event.preventDefault();
-            sendMessage(); 
+            sendMessage();
         }
     });
 
-    // Funzione per gestire tutti i messaggi DOPO il primo
     async function sendMessage() {
         const messageText = userInput.value.trim();
         if (messageText === '') return;
@@ -64,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
         addUserMessage(messageText);
         chatHistory.push({ role: 'user', text: messageText });
         userInput.value = '';
+
         addBotMessage("sta scrivendo...", true);
 
         try {
@@ -72,19 +61,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: messageText, history: chatHistory }),
             });
-            if (!response.ok) { throw new Error('La richiesta al bot è fallita'); }
+
+            if (!response.ok) throw new Error('La richiesta al bot è fallita');
+
             const data = await response.json();
-            const botReply = data.reply;
             removeTypingIndicator();
-            addBotMessage(botReply);
-            chatHistory.push({ role: 'model', text: botReply });
+            addBotMessage(data.reply);
+            chatHistory.push({ role: 'model', text: data.reply });
+
         } catch (error) {
             console.error("Errore:", error);
             removeTypingIndicator();
             addBotMessage("Ops! Qualcosa è andato storto. Riprova tra un attimo.");
         }
     }
-    
+
     function addUserMessage(message) {
         const el = document.createElement('div');
         el.className = 'chat-message user-message';
@@ -95,16 +86,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function addBotMessage(message, isTyping = false) {
         message = message.replace('[ASK_EMAIL]', '').trim();
+
         const el = document.createElement('div');
         el.className = 'chat-message bot-message';
         el.textContent = message;
-        if (isTyping) { el.classList.add('typing-indicator'); }
+        if (isTyping) el.classList.add('typing-indicator');
         chatMessages.appendChild(el);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
-    
+
     function removeTypingIndicator() {
         const indicator = chatMessages.querySelector('.typing-indicator');
-        if (indicator) { chatMessages.removeChild(indicator); }
+        if (indicator) chatMessages.removeChild(indicator);
     }
 });
