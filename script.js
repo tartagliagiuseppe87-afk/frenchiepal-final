@@ -9,7 +9,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let chatHistory = [];
     const userId = getUserId(); // Assumendo che la funzione getUserId sia ancora presente
 
-    // Funzione per creare/recuperare ID utente (NECESSARIA)
     function getUserId() {
         let userId = localStorage.getItem('frenchiepal_user_id');
         if (!userId) {
@@ -19,37 +18,18 @@ document.addEventListener('DOMContentLoaded', () => {
         return userId;
     }
 
-    // --- AVVIO CHAT CORRETTO ---
-    startChatBtn.addEventListener('click', async () => {
+    // --- AVVIO CHAT SEMPLIFICATO ---
+    startChatBtn.addEventListener('click', () => {
         chatContainer.classList.remove('hidden');
-        // Se la chat è vuota, INVIA IL SEGNALE DI AVVIO al backend
-        if (chatMessages.children.length === 0) {
-            addBotMessage("sta scrivendo...", true);
-            try {
-                // Invia il segnale INITIATE_CHAT al backend
-                const response = await fetch('/.netlify/functions/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: "INITIATE_CHAT", history: [], userId: userId }) // Invia history vuota e userId
-                });
-                if (!response.ok) throw new Error('La richiesta di avvio è fallita');
-                const data = await response.json();
-                removeTypingIndicator();
-                addBotMessage(data.reply); // Mostra la prima domanda del bot
-                chatHistory.push({ role: 'model', text: data.reply }); // Aggiunge la prima domanda alla cronologia
-            } catch (error) {
-                console.error("Errore di avvio:", error);
-                removeTypingIndicator();
-                addBotMessage("Ops! Non riesco a connettermi. Riprova tra un attimo.");
-            }
-        }
+        // Non fa nient'altro, aspetta l'utente
+        userInput.focus(); // Mette il cursore pronto per scrivere
     });
 
     closeChatBtn.addEventListener('click', () => {
         chatContainer.classList.add('hidden');
     });
 
-    // Invia messaggio (gestisce tutti i messaggi DOPO il primo)
+    // Invia messaggio (gestisce sia il primo che i successivi)
     sendBtn.addEventListener('click', sendMessage);
     userInput.addEventListener('keypress', (event) => {
         if (event.key === 'Enter') {
@@ -63,15 +43,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (messageText === '') return;
 
         addUserMessage(messageText);
+        // Aggiungi il messaggio utente alla cronologia PRIMA di inviare
         chatHistory.push({ role: 'user', text: messageText });
         userInput.value = '';
+
         addBotMessage("sta scrivendo...", true);
 
         try {
-            // Chiama il backend con il messaggio utente e la cronologia completa
+            // Chiama il backend con il messaggio e la cronologia (che sarà vuota la prima volta)
             const response = await fetch('/.netlify/functions/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                // Invia la cronologia AGGIORNATA che include l'ultimo messaggio utente
                 body: JSON.stringify({ message: messageText, history: chatHistory, userId: userId }),
             });
 
@@ -80,6 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             removeTypingIndicator();
             addBotMessage(data.reply);
+            // Aggiungi la risposta del bot alla cronologia
             chatHistory.push({ role: 'model', text: data.reply });
 
         } catch (error) {
