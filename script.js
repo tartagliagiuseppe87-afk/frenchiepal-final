@@ -73,11 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Funzioni helper (rimangono invariate)
-    function addUserMessage(message) { /* ... */ }
-    function addBotMessage(message, isTyping = false) { /* ... */ }
-    function removeTypingIndicator() { /* ... */ }
-
-    // Implementazione funzioni helper
     function addUserMessage(message) {
         const el = document.createElement('div');
         el.className = 'chat-message user-message';
