@@ -1,4 +1,4 @@
-// USARE 'require' INVECE DI 'import'
+// USARE 'require'
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const systemPrompt = `
@@ -33,15 +33,17 @@ ESEMPI DI STILE (DA SEGUIRE ALLA LETTERA):
 * **NON FARE (risposta lunga e da enciclopedia):** "Capisco la tua preoccupazione! Si chiama coprofagia... ci sono diverse ragioni... la prima cosa da fare è escludere cause mediche..."
 `;
 
-// --- Integrazione Supabase ---
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-async function saveLogToSupabase(entry) { /* ... (codice invariato) ... */ }
+// --- Integrazione Supabase (Temporaneamente Disabilitata per Stabilità) ---
+// const SUPABASE_URL = process.env.SUPABASE_URL;
+// const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// async function saveLogToSupabase(entry) { /* ... */ }
 // --- Fine Integrazione Supabase ---
 
 // USARE 'exports.handler'
 exports.handler = async function(event, context) {
-  // ... (controllo httpMethod invariato) ...
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method Not Allowed" };
+  }
 
   try {
     const { message, history = [], userId } = JSON.parse(event.body || '{}');
@@ -52,79 +54,6 @@ exports.handler = async function(event, context) {
 
     // --- LOGICA INFALLIBILE BASATA SU HISTORY.LENGTH CORRETTA ---
 
-    // FASE 1: Primo messaggio
-    if (message === "INITIATE_CHAT") { /* ... (codice invariato, funziona) ... */ }
-
-    // FASE 2: Risposta alla prima domanda (history.length === 1)
-    if (history && history.length === 1) { /* ... (codice invariato, funziona) ... */ }
-
-    // FASE 3: Risposta alla seconda domanda (history.length === 3)
-    if (history && history.length === 3) { /* ... (codice invariato, funziona) ... */ }
-
-    // FASE 4: Passiamo la palla a Gemini con LIMITE DI TOKEN AGGRESSIVO
-    console.log("HANDLER - FASE 4 (Gemini) Inizio");
-    if (!process.env.GEMINI_API_KEY) { throw new Error("GEMINI_API_KEY non definita!"); }
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    console.log("GoogleGenerativeAI inizializzato.");
-
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    console.log("Modello Gemini ottenuto.");
-
-    const chatHistory = history.map(item => ({
-      role: item.role === 'model' ? 'model' : 'user', // Ruolo Corretto
-      parts: [{ text: item.text }]
-    }));
-    console.log("Cronologia mappata per Gemini.");
-
-    const chat = model.startChat({
-      history: chatHistory,
-      systemInstruction: {
-        role: "system",
-        parts: [{ text: systemPrompt }]
-      },
-      // --- NUOVA IMPOSTAZIONE: Limite massimo di token AGGRESSIVO ---
-      generationConfig: {
-        maxOutputTokens: 60, // Limite molto più stretto (circa 40-45 parole max)
-      }
-    });
-    console.log("Chat Gemini avviata con limite token.");
-
-    console.log("Invio messaggio a Gemini:", message);
-    const result = await chat.sendMessage(message);
-    console.log("Risposta ricevuta da Gemini.");
-    replyText = await result.response.text();
-
-    console.log(`USER_ID: ${userId} | USER: "${message}" | BOT: "${replyText}"`);
-
-    // await saveLogToSupabase({ /* ... */ }); // Lasciamo Supabase commentato per ora
-
-    console.log("HANDLER - FASE 4 (Gemini) Eseguita");
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ reply: replyText })
-    };
-
-  } catch (error) {
-    console.error("ERRORE GENERALE nella funzione chat:", error);
-    // ... (gestione errore invariata) ...
-    return { statusCode: 500, body: JSON.stringify({ error: "Errore interno del server" }) };
-  }
-};
-
-// Implementazione di saveLogToSupabase (anche se commentata sopra)
-async function saveLogToSupabase(entry) {
-  if (!SUPABASE_URL || !SUPABASE_KEY) { console.warn("Supabase non config."); return; }
-  try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/chat_logs`, {
-      method: "POST", headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "return=minimal" },
-      body: JSON.stringify(entry) });
-    if (!response.ok) { console.error("Errore Supabase:", response.status, await response.text()); }
-    else { console.log("Log Supabase OK."); }
-  } catch (err) { console.error("Errore fetch Supabase:", err); }
-}
-
-// Codici FASI 1, 2, 3 per riferimento (non modificati)
-/*
     // FASE 1: Primo messaggio
     if (message === "INITIATE_CHAT") {
         replyText = "Ciao! Sono qui per aiutarti con il tuo amico a quattro zampe 🐾. Per darti i consigli migliori, mi dici se il tuo cane è un Bulldog Francese?";
@@ -156,4 +85,53 @@ async function saveLogToSupabase(entry) {
         // await saveLogToSupabase({ user_id: userId, role: 'bot_ready', reply: replyText });
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
-*/
+
+    // FASE 4: Passiamo la palla a Gemini SENZA limite di token
+    console.log("HANDLER - FASE 4 (Gemini) Inizio");
+    if (!process.env.GEMINI_API_KEY) { throw new Error("GEMINI_API_KEY non definita!"); }
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    console.log("GoogleGenerativeAI inizializzato.");
+
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    console.log("Modello Gemini ottenuto.");
+
+    const chatHistory = history.map(item => ({
+      role: item.role === 'model' ? 'model' : 'user', // Ruolo Corretto
+      parts: [{ text: item.text }]
+    }));
+    console.log("Cronologia mappata per Gemini.");
+
+    const chat = model.startChat({
+      history: chatHistory,
+      systemInstruction: {
+        role: "system",
+        parts: [{ text: systemPrompt }]
+      },
+      // --- RIMOSSO IL BLOCCO generationConfig ---
+    });
+    console.log("Chat Gemini avviata.");
+
+    console.log("Invio messaggio a Gemini:", message);
+    const result = await chat.sendMessage(message);
+    console.log("Risposta ricevuta da Gemini.");
+    replyText = await result.response.text();
+
+    console.log(`USER_ID: ${userId} | USER: "${message}" | BOT: "${replyText}"`);
+
+    // await saveLogToSupabase({ /* ... */ }); // Lasciamo Supabase commentato per ora
+
+    console.log("HANDLER - FASE 4 (Gemini) Eseguita");
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ reply: replyText })
+    };
+
+  } catch (error) {
+    console.error("ERRORE GENERALE nella funzione chat:", error);
+    // ... (gestione errore invariata) ...
+    return { statusCode: 500, body: JSON.stringify({ error: "Errore interno del server" }) };
+  }
+};
+
+// Implementazione di saveLogToSupabase (anche se commentata sopra)
+// async function saveLogToSupabase(entry) { /* ... codice ... */ }
