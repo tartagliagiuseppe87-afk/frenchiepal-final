@@ -5,7 +5,7 @@ const systemPrompt = `
 PERSONA E CONTESTO:
 Sei 'FrenchiePal', un assistente virtuale e un grande appassionato di Bulldog Francesi. La conversazione è già iniziata e l'utente ti ha già fornito le informazioni di base sul suo cane (razza, nome, età), che si trovano nella cronologia della chat. Il tuo compito è continuare la conversazione da questo punto in poi.
 
-Se il cane è un Bulldog Francese, agisci como 'FrenchieFriend', l'amico super esperto. Se è un'altra razza, agisci como un assistente generale che ama tutti i cani.
+Se il cane è un Bulldog Francese, agisci come 'FrenchieFriend', l'amico super esperto. Se è un'altra razza, agisci come un assistente generale che ama tutti i cani.
 
 ---
 OBIETTIVO PRINCIPALE:
@@ -42,7 +42,7 @@ async function saveLogToSupabase(entry) {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/chat_logs`, {
       method: "POST", headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "return=minimal" },
       body: JSON.stringify(entry) });
-    if (!response.ok) { console.error("Errore Supabase:", response.status, await response.text()); } 
+    if (!response.ok) { console.error("Errore Supabase:", response.status, await response.text()); }
     else { console.log("Log Supabase OK."); }
   } catch (err) { console.error("Errore fetch Supabase:", err); }
 }
@@ -56,11 +56,11 @@ export async function handler(event, context) {
   try {
     const { message, history = [], userId } = JSON.parse(event.body);
     const userMessageLower = message.toLowerCase();
-    let replyText = ""; 
+    let replyText = "";
 
     console.log(`HANDLER START - Received history length: ${history.length}, Message: ${message}`); // Log per debug
 
-    // --- LOGICA INFALLIBILE BASATA SU HISTORY.LENGTH ---
+    // --- LOGICA INFALLIBILE BASATA SU HISTORY.LENGTH CORRETTA ---
 
     // FASE 1: Primo messaggio in assoluto (history ricevuta è vuota).
     if (message === "INITIATE_CHAT") {
@@ -70,8 +70,9 @@ export async function handler(event, context) {
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
 
-    // FASE 2: Risposta alla prima domanda (history ricevuta ha 1 messaggio: [bot_init]).
-    if (history.length === 1) { 
+    // FASE 2: Risposta alla prima domanda (history ricevuta ha 2 messaggi: [bot_init, user_reply1]).
+    // CORREZIONE: Il controllo deve essere history.length === 2
+    if (history.length === 2) {
         console.log("HANDLER - FASE 2 Inizio");
         if (userMessageLower.includes('sì') || userMessageLower.includes('si')) {
             replyText = "Fantastico! Adoro i Frenchie 🥰. Come si chiama e quanti mesi/anni ha?";
@@ -83,9 +84,10 @@ export async function handler(event, context) {
         await saveLogToSupabase({ user_id: userId, role: 'bot_intro', reply: replyText });
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
-    
-    // FASE 3: Risposta alla seconda domanda (history ricevuta ha 3 messaggi: [bot_init, user_reply1, bot_intro]).
-    if (history.length === 3) { 
+
+    // FASE 3: Risposta alla seconda domanda (history ricevuta ha 4 messaggi: [bot_init, user_reply1, bot_intro, user_reply2]).
+    // CORREZIONE: Il controllo deve essere history.length === 4
+    if (history.length === 4) {
         console.log("HANDLER - FASE 3 Inizio");
         replyText = "Grazie! 🥰 Ora sono pronto. Come posso aiutarti oggi con lui?";
         console.log("HANDLER - FASE 3 Eseguita");
@@ -94,7 +96,7 @@ export async function handler(event, context) {
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
 
-    // FASE 4: Solo ora (history ricevuta ha 5 o più messaggi), passiamo la palla a Gemini.
+    // FASE 4: Solo ora (history ricevuta ha 6 o più messaggi), passiamo la palla a Gemini.
     console.log("HANDLER - FASE 4 (Gemini) Inizio");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
@@ -111,15 +113,15 @@ export async function handler(event, context) {
         parts: [{ text: systemPrompt }]
       },
     });
-    
+
     const result = await chat.sendMessage(message);
-    replyText = await result.response.text(); 
+    replyText = await result.response.text();
 
     console.log(`USER_ID: ${userId} | USER: "${message}" | BOT: "${replyText}"`);
 
     await saveLogToSupabase({
         user_id: userId, role: 'conversation', message: message, reply: replyText,
-        meta: { history_length: history.length } 
+        meta: { history_length: history.length }
     });
 
     console.log("HANDLER - FASE 4 (Gemini) Eseguita");
@@ -132,10 +134,10 @@ export async function handler(event, context) {
     console.error("Errore nella funzione chat:", error);
     try {
       const { userId } = JSON.parse(event.body || '{}');
-      await saveLogToSupabase({ user_id: userId || 'unknown', role: 'error', message: event.body, 
+      await saveLogToSupabase({ user_id: userId || 'unknown', role: 'error', message: event.body,
           reply: error.message, meta: { stack: error.stack } });
     } catch (logError) { console.error("Errore salvataggio log errore:", logError); }
-    
+
     return { statusCode: 500, body: JSON.stringify({ error: "Errore interno del server" }) };
   }
 }
