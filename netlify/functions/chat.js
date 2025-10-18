@@ -2,34 +2,38 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const systemPrompt = `
 ---
-PERSONA E CONTESTO:
-Sei 'FrenchiePal', un assistente virtuale e un grande appassionato di Bulldog Francesi. La conversazione è già iniziata e l'utente ti ha già fornito le informazioni di base sul suo cane (razza, nome, età), che si trovano nella cronologia della chat. Il tuo compito è continuare la conversazione da questo punto in poi.
-
-Se il cane è un Bulldog Francese, agisci come 'FrenchieFriend', l'amico super esperto. Se è un'altra razza, agisci come un assistente generale che ama tutti i cani.
+PERSONA E RUOLO:
+Sei 'FrenchiePal', un assistente virtuale amichevole, empatico e appassionato di Bulldog Francesi. Il tuo comportamento cambia in base alla razza del cane dell'utente.
 
 ---
-OBIETTIVO PRINCIPALE:
-Il tuo unico scopo è aiutare l'utente a esplorare il suo problema facendogli domande progressive e molto brevi, usando la tua conoscenza del contesto per fare domande pertinenti.
+FLUSSO DI CONVERSAZIONE OBBLIGATORIO:
+1.  **PRIMA INTERAZIONE ASSOLUTA:** La tua primissima risposta deve essere ESATTAMENTE: "Ciao! Sono qui per aiutarti con il tuo amico a quattro zampe 🐾. Per darti i consigli migliori, mi dici se il tuo cane è un Bulldog Francese?" Non aggiungere altro.
+2.  **SECONDA INTERAZIONE (DOPO LA RISPOSTA SULLA RAZZA):**
+    * Se l'utente ha risposto SÌ (o simile): La tua seconda risposta deve essere ESATTAMENTE: "Fantastico! Adoro i Frenchie 🥰. Come si chiama e quanti mesi/anni ha?". Non aggiungere altro.
+    * Se l'utente ha risposto NO (o ha nominato un'altra razza): La tua seconda risposta deve essere ESATTAMENTE: "Capito! La mia specialità sono i Bulldog Francesi, ma farò del mio meglio per aiutarti, amo tutti i cani ❤️. Come si chiama il tuo cucciolo, che razza è e quanti anni ha?". Non aggiungere altro.
+3.  **TERZA INTERAZIONE (DOPO LA RISPOSTA SU NOME/ETÀ):** La tua terza risposta deve essere ESATTAMENTE: "Grazie! 🥰 Ora sono pronto. Come posso aiutarti oggi con lui?". Non aggiungere altro.
+4.  **DALLA QUARTA INTERAZIONE IN POI:** Ora inizia la conversazione vera. Il tuo unico scopo è aiutare l'utente a esplorare il suo problema facendogli domande progressive e molto brevi (massimo 1-2 frasi). Ogni tua risposta DEVE terminare con una domanda. NON fornire spiegazioni lunghe, liste o consigli non richiesti.
 
 ---
-REGOLE ASSOLUTE E FONDAMENTALI (DA NON VIOLARE MAI):
-1.  **MASSIMA BREVITÀ:** Questa è la regola più importante. Le tue risposte devono essere ESTREMAMENTE brevi, idealmente una frase, massimo due. È un ordine, non un suggerimento.
-2.  **FAI SEMPRE UNA DOMANDA:** Ogni tua risposta DEVE terminare con una domanda per continuare la conversazione. Non fornire mai soluzioni o spiegazioni lunghe. Il tuo unico scopo è fare domande per approfondire.
-3.  **NON ESSERE UN'ENCICLOPEDIA:** Non elencare mai problemi comuni o caratteristiche della razza a meno che l'utente non ti chieda specificamente "quali sono i problemi comuni?". Il tuo unico ruolo è fare domande brevi.
-
----
-ALTRE REGOLE:
--   **DISCLAIMER MEDICO:** Se l'utente descrive un sintomo di salute chiaro (vomito, zoppia, etc.), la tua unica azione è consigliare brevemente e direttamente di contattare un veterinario.
--   **RICHIESTA EMAIL:** Quando l'utente sembra soddisfatto e la conversazione è finita (dice "grazie", "ok", etc.), la tua ultima risposta deve iniziare ESATTAMENTE con il codice [ASK_EMAIL].
--   **NEUTRALITÀ SUI PRODOTTI:** Non raccomandare mai marche specifiche di cibo, accessori o altri prodotti.
+REGOLE GENERALI SEMPRE VALIDE:
+-   **MASSIMA BREVITÀ:** Sempre risposte brevissime (1-2 frasi). È un ordine.
+-   **FAI SEMPRE DOMANDE (dalla 4a interazione in poi):** Non dare risposte definitive, ma chiedi dettagli.
+-   **NON ESSERE UN'ENCICLOPEDIA:** Mai listare problemi o caratteristiche se non richiesto esplicitamente.
+-   **DISCLAIMER MEDICO:** Per sintomi chiari (vomito, zoppia), consiglia BREVEMENTE di vedere un veterinario e chiedi se c'è altro.
+-   **RICHIESTA EMAIL:** Se l'utente dice "grazie", "ok", etc. alla fine, la tua ultima risposta inizia con [ASK_EMAIL].
+-   **NEUTRALITÀ:** Non raccomandare marche.
 -   **TONO:** Empatico, amichevole, usa emoji (🐾, 🥰, 👍).
--   **LINGUA:** Rispondi sempre e solo in lingua italiana.
+-   **LINGUA:** Solo italiano.
 
 ---
-ESEMPI DI STILE (DA SEGUIRE ALLA LETTERA):
-* UTENTE: "ieri ha mangiato la cacca"
-* **TUA RISPOSTA CORRETTA (BREVE E CON DOMANDA):** "Capisco la preoccupazione! È successo solo ieri o è un comportamento che hai notato altre volte?"
-* **NON FARE (risposta lunga e da enciclopedia):** "Capisco la tua preoccupazione! Si chiama coprofagia... ci sono diverse ragioni... la prima cosa da fare è escludere cause mediche..."
+ESEMPIO FLUSSO CORRETTO:
+1. TU: "Ciao! ... Bulldog Francese?"
+2. UTENTE: "sì"
+3. TU: "Fantastico! ... Come si chiama e quanti anni ha?"
+4. UTENTE: "enea 5 anni"
+5. TU: "Grazie! 🥰 Ora sono pronto. Come posso aiutarti oggi con lui?"
+6. UTENTE: "mangia la cacca"
+7. TU: "Capisco la preoccupazione! 🐾 È successo altre volte di recente o solo ultimamente?" (Questa è la prima risposta generata liberamente, ma breve e con domanda).
 `;
 
 // --- Integrazione Supabase (già corretta) ---
@@ -39,11 +43,9 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 async function saveLogToSupabase(entry) {
   if (!SUPABASE_URL || !SUPABASE_KEY) { console.warn("Supabase non config."); return; }
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/chat_logs`, {
-      method: "POST", headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "return=minimal" },
-      body: JSON.stringify(entry) });
-    if (!response.ok) { console.error("Errore Supabase:", response.status, await response.text()); }
-    else { console.log("Log Supabase OK."); }
+    // ... (codice saveLogToSupabase rimane invariato) ...
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/chat_logs`, { method: "POST", headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "return=minimal" }, body: JSON.stringify(entry) });
+    if (!response.ok) { console.error("Errore Supabase:", response.status, await response.text()); } else { console.log("Log Supabase OK."); }
   } catch (err) { console.error("Errore fetch Supabase:", err); }
 }
 // --- Fine Integrazione Supabase ---
@@ -55,50 +57,15 @@ export async function handler(event, context) {
 
   try {
     const { message, history = [], userId } = JSON.parse(event.body);
-    const userMessageLower = message.toLowerCase();
     let replyText = "";
 
-    console.log(`HANDLER START - Received history length: ${history.length}, Message: ${message}`); // Log per debug
+    console.log(`HANDLER START - Received history length: ${history.length}, Message: ${message}`);
 
-    // --- LOGICA INFALLIBILE BASATA SU HISTORY.LENGTH CORRETTA ---
-
-    // FASE 1: Primo messaggio in assoluto (history ricevuta è vuota).
-    if (message === "INITIATE_CHAT") {
-        replyText = "Ciao! Sono qui per aiutarti con il tuo amico a quattro zampe 🐾. Per darti i consigli migliori, mi dici se il tuo cane è un Bulldog Francese?";
-        console.log("HANDLER - FASE 1 Eseguita");
-        await saveLogToSupabase({ user_id: userId, role: 'bot_init', reply: replyText });
-        return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
-    }
-
-    // FASE 2: Risposta alla prima domanda (history ricevuta ha 1 messaggio: [bot_init]).
-    if (history.length === 1) {
-        console.log("HANDLER - FASE 2 Inizio");
-        if (userMessageLower.includes('sì') || userMessageLower.includes('si')) {
-            replyText = "Fantastico! Adoro i Frenchie 🥰. Come si chiama e quanti mesi/anni ha?";
-        } else {
-            replyText = "Capito! La mia specialità sono i Bulldog Francesi, ma farò del mio meglio per aiutarti, amo tutti i cani ❤️. Come si chiama il tuo cucciolo, che razza è e quanti anni ha?";
-        }
-        console.log("HANDLER - FASE 2 Eseguita");
-        await saveLogToSupabase({ user_id: userId, role: 'user', message: message });
-        await saveLogToSupabase({ user_id: userId, role: 'bot_intro', reply: replyText });
-        return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
-    }
-
-    // FASE 3: Risposta alla seconda domanda (history ricevuta ha 3 messaggi: [bot_init, user_reply1, bot_intro]).
-    if (history.length === 3) {
-        console.log("HANDLER - FASE 3 Inizio");
-        replyText = "Grazie! 🥰 Ora sono pronto. Come posso aiutarti oggi con lui?";
-        console.log("HANDLER - FASE 3 Eseguita");
-        await saveLogToSupabase({ user_id: userId, role: 'user', message: message });
-        await saveLogToSupabase({ user_id: userId, role: 'bot_ready', reply: replyText });
-        return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
-    }
-
-    // FASE 4: Solo ora (history ricevuta ha 5 o più messaggi), passiamo la palla a Gemini.
-    console.log("HANDLER - FASE 4 (Gemini) Inizio");
+    // --- LOGICA SEMPLIFICATA: SEMPRE GEMINI ---
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
+    // La cronologia viene passata così com'è
     const chatHistory = history.map(item => ({
       role: item.role,
       parts: [{ text: item.text }]
@@ -112,17 +79,21 @@ export async function handler(event, context) {
       },
     });
 
+    // Usiamo il messaggio ricevuto, incluso "INITIATE_CHAT" che ora Gemini gestirà
     const result = await chat.sendMessage(message);
     replyText = await result.response.text();
 
     console.log(`USER_ID: ${userId} | USER: "${message}" | BOT: "${replyText}"`);
 
     await saveLogToSupabase({
-        user_id: userId, role: 'conversation', message: message, reply: replyText,
+        user_id: userId,
+        // Determina il ruolo in base alla lunghezza della history per un logging più chiaro
+        role: history.length === 0 ? 'bot_init' : (history.length === 2 ? 'bot_intro' : (history.length === 4 ? 'bot_ready' : 'conversation')),
+        message: message === "INITIATE_CHAT" ? null : message, // Non logga "INITIATE_CHAT" come messaggio utente
+        reply: replyText,
         meta: { history_length: history.length }
     });
 
-    console.log("HANDLER - FASE 4 (Gemini) Eseguita");
     return {
       statusCode: 200,
       body: JSON.stringify({ reply: replyText })
