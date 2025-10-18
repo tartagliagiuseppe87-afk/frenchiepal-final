@@ -32,7 +32,21 @@ ESEMPI DI STILE (DA SEGUIRE ALLA LETTERA):
 * **NON FARE (risposta lunga e da enciclopedia):** "Capisco la tua preoccupazione! Si chiama coprofagia... ci sono diverse ragioni... la prima cosa da fare è escludere cause mediche..."
 `;
 
-// --- Rimossa l'integrazione Supabase ---
+// --- Integrazione Supabase (già corretta) ---
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+async function saveLogToSupabase(entry) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) { console.warn("Supabase non config."); return; }
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/chat_logs`, {
+      method: "POST", headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "return=minimal" },
+      body: JSON.stringify(entry) });
+    if (!response.ok) { console.error("Errore Supabase:", response.status, await response.text()); }
+    else { console.log("Log Supabase OK."); }
+  } catch (err) { console.error("Errore fetch Supabase:", err); }
+}
+// --- Fine Integrazione Supabase ---
 
 export async function handler(event, context) {
   if (event.httpMethod !== "POST") {
@@ -40,23 +54,23 @@ export async function handler(event, context) {
   }
 
   try {
-    const { message, history = [], userId } = JSON.parse(event.body); // userId rimane per i log Netlify
+    const { message, history = [], userId } = JSON.parse(event.body);
     const userMessageLower = message.toLowerCase();
     let replyText = "";
 
-    console.log(`HANDLER START - Received history length: ${history.length}, Message: ${message}`);
+    console.log(`HANDLER START - Received history length: ${history.length}, Message: ${message}`); // Log per debug
 
     // --- LOGICA INFALLIBILE BASATA SU HISTORY.LENGTH CORRETTA ---
 
-    // FASE 1: Primo messaggio
+    // FASE 1: Primo messaggio in assoluto (history ricevuta è vuota).
     if (message === "INITIATE_CHAT") {
         replyText = "Ciao! Sono qui per aiutarti con il tuo amico a quattro zampe 🐾. Per darti i consigli migliori, mi dici se il tuo cane è un Bulldog Francese?";
         console.log("HANDLER - FASE 1 Eseguita");
-        console.log(`USER_ID: ${userId} | BOT_INIT: "${replyText}"`); // Log Netlify
+        await saveLogToSupabase({ user_id: userId, role: 'bot_init', reply: replyText });
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
 
-    // FASE 2: Risposta alla prima domanda
+    // FASE 2: Risposta alla prima domanda (history ricevuta ha 1 messaggio: [bot_init]).
     if (history.length === 1) {
         console.log("HANDLER - FASE 2 Inizio");
         if (userMessageLower.includes('sì') || userMessageLower.includes('si')) {
@@ -65,20 +79,22 @@ export async function handler(event, context) {
             replyText = "Capito! La mia specialità sono i Bulldog Francesi, ma farò del mio meglio per aiutarti, amo tutti i cani ❤️. Come si chiama il tuo cucciolo, che razza è e quanti anni ha?";
         }
         console.log("HANDLER - FASE 2 Eseguita");
-        console.log(`USER_ID: ${userId} | USER: "${message}" | BOT_INTRO: "${replyText}"`); // Log Netlify
+        await saveLogToSupabase({ user_id: userId, role: 'user', message: message });
+        await saveLogToSupabase({ user_id: userId, role: 'bot_intro', reply: replyText });
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
 
-    // FASE 3: Risposta alla seconda domanda
+    // FASE 3: Risposta alla seconda domanda (history ricevuta ha 3 messaggi: [bot_init, user_reply1, bot_intro]).
     if (history.length === 3) {
         console.log("HANDLER - FASE 3 Inizio");
         replyText = "Grazie! 🥰 Ora sono pronto. Come posso aiutarti oggi con lui?";
         console.log("HANDLER - FASE 3 Eseguita");
-        console.log(`USER_ID: ${userId} | USER: "${message}" | BOT_READY: "${replyText}"`); // Log Netlify
+        await saveLogToSupabase({ user_id: userId, role: 'user', message: message });
+        await saveLogToSupabase({ user_id: userId, role: 'bot_ready', reply: replyText });
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
 
-    // FASE 4: Passiamo la palla a Gemini.
+    // FASE 4: Solo ora (history ricevuta ha 5 o più messaggi), passiamo la palla a Gemini.
     console.log("HANDLER - FASE 4 (Gemini) Inizio");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
@@ -99,7 +115,12 @@ export async function handler(event, context) {
     const result = await chat.sendMessage(message);
     replyText = await result.response.text();
 
-    console.log(`USER_ID: ${userId} | USER: "${message}" | BOT: "${replyText}"`); // Log Netlify
+    console.log(`USER_ID: ${userId} | USER: "${message}" | BOT: "${replyText}"`);
+
+    await saveLogToSupabase({
+        user_id: userId, role: 'conversation', message: message, reply: replyText,
+        meta: { history_length: history.length }
+    });
 
     console.log("HANDLER - FASE 4 (Gemini) Eseguita");
     return {
@@ -109,13 +130,11 @@ export async function handler(event, context) {
 
   } catch (error) {
     console.error("Errore nella funzione chat:", error);
-    // Log dell'errore su Netlify
     try {
-        const { userId } = JSON.parse(event.body || '{}');
-        console.error(`USER_ID: ${userId || 'unknown'} | ERROR: ${error.message} | STACK: ${error.stack}`);
-    } catch (logError) {
-        console.error("Errore nel logging dell'errore:", logError);
-    }
+      const { userId } = JSON.parse(event.body || '{}');
+      await saveLogToSupabase({ user_id: userId || 'unknown', role: 'error', message: event.body,
+          reply: error.message, meta: { stack: error.stack } });
+    } catch (logError) { console.error("Errore salvataggio log errore:", logError); }
 
     return { statusCode: 500, body: JSON.stringify({ error: "Errore interno del server" }) };
   }
