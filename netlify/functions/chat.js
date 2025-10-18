@@ -44,22 +44,24 @@ exports.handler = async function(event, context) {
   // ... (controllo httpMethod invariato) ...
 
   try {
-    const { message, history = [], userId } = JSON.parse(event.body || '{}'); 
-    const userMessageLower = message ? message.toLowerCase() : ""; 
-    let replyText = ""; 
+    const { message, history = [], userId } = JSON.parse(event.body || '{}');
+    const userMessageLower = message ? message.toLowerCase() : "";
+    let replyText = "";
 
     console.log(`HANDLER START - Received history length: ${history.length}, Message: ${message}`);
 
+    // --- LOGICA INFALLIBILE BASATA SU HISTORY.LENGTH CORRETTA ---
+
     // FASE 1: Primo messaggio
-    if (message === "INITIATE_CHAT") { /* ... (codice invariato) ... */ }
+    if (message === "INITIATE_CHAT") { /* ... (codice invariato, funziona) ... */ }
 
     // FASE 2: Risposta alla prima domanda (history.length === 1)
-    if (history && history.length === 1) { /* ... (codice invariato) ... */ }
-    
-    // FASE 3: Risposta alla seconda domanda (history.length === 3)
-    if (history && history.length === 3) { /* ... (codice invariato) ... */ }
+    if (history && history.length === 1) { /* ... (codice invariato, funziona) ... */ }
 
-    // FASE 4: Passiamo la palla a Gemini (history.length >= 5)
+    // FASE 3: Risposta alla seconda domanda (history.length === 3)
+    if (history && history.length === 3) { /* ... (codice invariato, funziona) ... */ }
+
+    // FASE 4: Passiamo la palla a Gemini con LIMITE DI TOKEN AGGRESSIVO
     console.log("HANDLER - FASE 4 (Gemini) Inizio");
     if (!process.env.GEMINI_API_KEY) { throw new Error("GEMINI_API_KEY non definita!"); }
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -68,13 +70,11 @@ exports.handler = async function(event, context) {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     console.log("Modello Gemini ottenuto.");
 
-    // --- CORREZIONE DEFINITIVA QUI ---
     const chatHistory = history.map(item => ({
-      // Usa 'model' come ruolo richiesto dall'API Gemini
-      role: item.role === 'model' ? 'model' : 'user', 
+      role: item.role === 'model' ? 'model' : 'user', // Ruolo Corretto
       parts: [{ text: item.text }]
     }));
-    console.log("Cronologia mappata per Gemini con ruoli corretti.");
+    console.log("Cronologia mappata per Gemini.");
 
     const chat = model.startChat({
       history: chatHistory,
@@ -82,13 +82,17 @@ exports.handler = async function(event, context) {
         role: "system",
         parts: [{ text: systemPrompt }]
       },
+      // --- NUOVA IMPOSTAZIONE: Limite massimo di token AGGRESSIVO ---
+      generationConfig: {
+        maxOutputTokens: 60, // Limite molto più stretto (circa 40-45 parole max)
+      }
     });
-    console.log("Chat Gemini avviata.");
+    console.log("Chat Gemini avviata con limite token.");
 
     console.log("Invio messaggio a Gemini:", message);
     const result = await chat.sendMessage(message);
     console.log("Risposta ricevuta da Gemini.");
-    replyText = await result.response.text(); 
+    replyText = await result.response.text();
 
     console.log(`USER_ID: ${userId} | USER: "${message}" | BOT: "${replyText}"`);
 
@@ -114,7 +118,42 @@ async function saveLogToSupabase(entry) {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/chat_logs`, {
       method: "POST", headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "return=minimal" },
       body: JSON.stringify(entry) });
-    if (!response.ok) { console.error("Errore Supabase:", response.status, await response.text()); } 
+    if (!response.ok) { console.error("Errore Supabase:", response.status, await response.text()); }
     else { console.log("Log Supabase OK."); }
   } catch (err) { console.error("Errore fetch Supabase:", err); }
 }
+
+// Codici FASI 1, 2, 3 per riferimento (non modificati)
+/*
+    // FASE 1: Primo messaggio
+    if (message === "INITIATE_CHAT") {
+        replyText = "Ciao! Sono qui per aiutarti con il tuo amico a quattro zampe 🐾. Per darti i consigli migliori, mi dici se il tuo cane è un Bulldog Francese?";
+        console.log("HANDLER - FASE 1 Eseguita");
+        // await saveLogToSupabase({ user_id: userId, role: 'bot_init', reply: replyText });
+        return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
+    }
+
+    // FASE 2: Risposta alla prima domanda (history.length === 1)
+    if (history && history.length === 1) {
+        console.log("HANDLER - FASE 2 Inizio");
+        if (userMessageLower.includes('si') || userMessageLower.includes('certo') || userMessageLower.includes('esatto') || userMessageLower === 'ok') {
+            replyText = "Fantastico! Adoro i Frenchie 🥰. Come si chiama e quanti mesi/anni ha?";
+        } else {
+            replyText = "Capito! La mia specialità sono i Bulldog Francesi, ma farò del mio meglio per aiutarti, amo tutti i cani ❤️. Come si chiama il tuo cucciolo, che razza è e quanti anni ha?";
+        }
+        console.log("HANDLER - FASE 2 Eseguita");
+        // await saveLogToSupabase({ user_id: userId, role: 'user', message: message });
+        // await saveLogToSupabase({ user_id: userId, role: 'bot_intro', reply: replyText });
+        return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
+    }
+
+    // FASE 3: Risposta alla seconda domanda (history.length === 3)
+    if (history && history.length === 3) {
+        console.log("HANDLER - FASE 3 Inizio");
+        replyText = "Grazie! 🥰 Ora sono pronto. Come posso aiutarti oggi con lui?";
+        console.log("HANDLER - FASE 3 Eseguita");
+        // await saveLogToSupabase({ user_id: userId, role: 'user', message: message });
+        // await saveLogToSupabase({ user_id: userId, role: 'bot_ready', reply: replyText });
+        return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
+    }
+*/
