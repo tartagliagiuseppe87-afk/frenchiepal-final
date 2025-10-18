@@ -5,7 +5,7 @@ const systemPrompt = `
 PERSONA E CONTESTO:
 Sei 'FrenchiePal', un assistente virtuale e un grande appassionato di Bulldog Francesi. La conversazione è già iniziata e l'utente ti ha già fornito le informazioni di base sul suo cane (razza, nome, età), che si trovano nella cronologia della chat. Il tuo compito è continuare la conversazione da questo punto in poi.
 
-Se il cane è un Bulldog Francese, agisci come 'FrenchieFriend', l'amico super esperto. Se è un'altra razza, agisci come un assistente generale che ama tutti i cani.
+Se il cane è un Bulldog Francese, agisci como 'FrenchieFriend', l'amico super esperto. Se è un'altra razza, agisci como un assistente generale che ama tutti i cani.
 
 ---
 OBIETTIVO PRINCIPALE:
@@ -37,7 +37,6 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 async function saveLogToSupabase(entry) {
-  // ... (funzione saveLogToSupabase rimane invariata) ...
   if (!SUPABASE_URL || !SUPABASE_KEY) { console.warn("Supabase non config."); return; }
   try {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/chat_logs`, {
@@ -59,12 +58,11 @@ export async function handler(event, context) {
     const userMessageLower = message.toLowerCase();
     let replyText = ""; 
 
-    // Log per Debug Estremo
-    console.log(`HANDLER START - Received history length: ${history.length}, Message: ${message}`);
+    console.log(`HANDLER START - Received history length: ${history.length}, Message: ${message}`); // Log per debug
 
-    // --- LOGICA INFALLIBILE A 3 FASI MANUALI ---
+    // --- LOGICA INFALLIBILE BASATA SU HISTORY.LENGTH ---
 
-    // FASE 1: Primo messaggio in assoluto.
+    // FASE 1: Primo messaggio in assoluto (history ricevuta è vuota).
     if (message === "INITIATE_CHAT") {
         replyText = "Ciao! Sono qui per aiutarti con il tuo amico a quattro zampe 🐾. Per darti i consigli migliori, mi dici se il tuo cane è un Bulldog Francese?";
         console.log("HANDLER - FASE 1 Eseguita");
@@ -72,7 +70,7 @@ export async function handler(event, context) {
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
 
-    // FASE 2: Risposta alla domanda sulla razza (la history ricevuta ha 1 solo messaggio).
+    // FASE 2: Risposta alla prima domanda (history ricevuta ha 1 messaggio: [bot_init]).
     if (history.length === 1) { 
         console.log("HANDLER - FASE 2 Inizio");
         if (userMessageLower.includes('sì') || userMessageLower.includes('si')) {
@@ -86,7 +84,7 @@ export async function handler(event, context) {
         return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
     }
     
-    // FASE 3: Risposta alla domanda su nome/età (la history ricevuta ha 3 messaggi).
+    // FASE 3: Risposta alla seconda domanda (history ricevuta ha 3 messaggi: [bot_init, user_reply1, bot_intro]).
     if (history.length === 3) { 
         console.log("HANDLER - FASE 3 Inizio");
         replyText = "Grazie! 🥰 Ora sono pronto. Come posso aiutarti oggi con lui?";
