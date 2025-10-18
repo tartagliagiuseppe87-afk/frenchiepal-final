@@ -41,8 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         addUserMessage(messageText);
 
-        // Aggiungi alla cronologia PRIMA di inviare
-        chatHistory.push({ role: 'user', text: messageText }); 
+        chatHistory.push({ role: 'assistant', text: messageText }); 
         userInput.value = '';
 
         addBotMessage("sta scrivendo...", true);
@@ -60,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
             removeTypingIndicator();
             addBotMessage(data.reply);
 
-            // ✅ Ruolo corretto 'assistant' per Gemini
+            // Ruolo front-end rimane 'assistant', ma backend lo mapperà a 'model'
             chatHistory.push({ role: 'assistant', text: data.reply }); 
 
         } catch (error) {
