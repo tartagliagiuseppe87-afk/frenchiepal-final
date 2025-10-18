@@ -28,14 +28,14 @@ exports.handler = async function(event, context) {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-        // Forza INITIATE_CHAT se è la prima interazione
+        // Prima interazione forzata
         const userMessage = history.length === 0 ? "INITIATE_CHAT" : message;
 
-        // Cronologia con system prompt come primo messaggio
+        // Cronologia con mapping corretto dei ruoli
         const chatHistoryWithSystem = [
-            { role: "system", parts: [{ text: systemPrompt }] },
+            { role: "model", parts: [{ text: systemPrompt }] }, // system prompt come model
             ...history.map(item => ({
-                role: item.role === 'assistant' ? 'assistant' : 'user',
+                role: item.role === 'assistant' ? 'model' : 'user', // assistant -> model, user -> user
                 parts: [{ text: item.text }]
             }))
         ];
@@ -56,6 +56,6 @@ exports.handler = async function(event, context) {
 
     } catch (error) {
         console.error("Errore nella funzione chat:", error);
-        return { statusCode: 500, body: JSON.stringify({ error: "Errore interno del server" }) };
+        return { statusCode: 500, body: JSON.stringify({ error: "Errore interno del server", details: error.message }) };
     }
 };
