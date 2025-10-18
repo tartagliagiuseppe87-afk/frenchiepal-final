@@ -1,8 +1,13 @@
 // USARE 'require'
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// Prompt SEMPLIFICATO solo per il test
-const systemPrompt = `Sei un assistente AI. Rispondi brevemente in italiano.`;
+// Prompt SEMPLIFICATO per Gemini
+const systemPrompt = `
+Sei 'FrenchiePal', un assistente AI amichevole per proprietari di cani, specializzato in Bulldog Francesi. Parla SEMPRE E SOLO IN ITALIANO.
+Il tuo compito è aiutare l'utente rispondendo alle sue domande in modo BREVE (massimo 2-3 frasi) e terminando SEMPRE con una domanda per continuare la conversazione.
+Se l'utente menziona sintomi di salute (vomito, zoppia, etc.), consiglia brevemente di contattare un veterinario.
+Se l'utente dice "grazie" o simili alla fine, inizia la risposta con [ASK_EMAIL]. Non raccomandare marche. Usa emoji 🐾.
+`;
 
 // USARE 'exports.handler'
 exports.handler = async function(event, context) {
@@ -11,44 +16,66 @@ exports.handler = async function(event, context) {
   }
 
   try {
-    const { message, userId } = JSON.parse(event.body || '{}'); // Ignoriamo history
-    let replyText = "";
+    // Parsing del body con fallback
+    let message = "Messaggio non ricevuto";
+    let history = [];
+    let userId = "unknown";
+    try {
+        const body = JSON.parse(event.body || '{}');
+        message = body.message || message;
+        history = body.history || history;
+        userId = body.userId || userId;
+    } catch (parseError) {
+        console.error("Errore parsing body:", parseError);
+        // Non bloccare l'esecuzione, prova a continuare se possibile
+    }
 
-    console.log(`HANDLER MINIMAL TEST - UserID: ${userId}, Message: ${message}`);
+    console.log(`HANDLER START - UserID: ${userId}, History Length: ${history.length}, Message: ${message}`);
 
-    // --- TEST MINIMO CHIAMATA GEMINI ---
+    // --- LOGICA SEMPLIFICATA: SEMPRE E SOLO GEMINI ---
     if (!process.env.GEMINI_API_KEY) {
-      throw new Error("GEMINI_API_KEY non definita!");
+      console.error("ERRORE: GEMINI_API_KEY non definita!");
+      throw new Error("Configurazione API Key mancante.");
     }
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    console.log("HANDLER MINIMAL TEST - GoogleGenerativeAI inizializzato.");
-
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    console.log("HANDLER MINIMAL TEST - Modello Gemini ottenuto.");
 
-    try {
-      console.log("HANDLER MINIMAL TEST - Invio messaggio a Gemini (senza history):", message);
-      // Chiamata diretta generateContent senza chat/history
-      const result = await model.generateContent([systemPrompt, message]);
-      const response = await result.response;
-      replyText = await response.text();
-      console.log("HANDLER MINIMAL TEST - Risposta ricevuta da Gemini.");
+    const chatHistory = history.map(item => ({
+      role: item.role === 'model' ? 'model' : 'user', // Ruolo Corretto
+      parts: [{ text: item.text }]
+    }));
 
-    } catch (geminiError) {
-       console.error("HANDLER MINIMAL TEST - ERRORE DURANTE CHIAMATA GEMINI:", geminiError);
-       // Rilancia l'errore per farlo catturare dal blocco catch esterno
-       throw geminiError;
-    }
+    const chat = model.startChat({
+      history: chatHistory,
+      systemInstruction: {
+        role: "system",
+        parts: [{ text: systemPrompt }] // Usa il prompt semplice
+      },
+       generationConfig: {
+        maxOutputTokens: 150, // Limite di sicurezza
+      }
+    });
 
-    console.log(`USER_ID: ${userId} | USER: "${message}" | BOT: "${replyText}"`);
+    console.log("Invio messaggio a Gemini:", message);
+    const result = await chat.sendMessage(message);
+    const responseText = await result.response.text();
+    console.log("Risposta ricevuta da Gemini.");
+
+    console.log(`USER_ID: ${userId} | USER: "${message}" | BOT: "${responseText}"`);
+
+    // --- Supabase Disabilitato ---
+    // console.log("Salvataggio Supabase saltato.");
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ reply: replyText })
+      body: JSON.stringify({ reply: responseText })
     };
 
   } catch (error) {
-    console.error("ERRORE GENERALE nel test minimo:", error);
+    console.error("ERRORE GENERALE nella funzione chat:", error);
+    // Log dell'errore su Vercel/Netlify
+    console.error(`ERROR DETAILS: ${error.message}, STACK: ${error.stack}`);
+    
     return { statusCode: 500, body: JSON.stringify({ error: `Errore interno del server: ${error.message}` }) };
   }
 }
