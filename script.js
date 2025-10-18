@@ -18,17 +18,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return userId;
     }
 
-    // --- AVVIO CHAT SEMPLIFICATO: ASPETTA L'UTENTE ---
     startChatBtn.addEventListener('click', () => {
         chatContainer.classList.remove('hidden');
-        userInput.focus(); // Mette il focus sull'input
+        userInput.focus();
     });
 
     closeChatBtn.addEventListener('click', () => {
         chatContainer.classList.add('hidden');
     });
 
-    // Invia messaggio (gestisce sia il primo che i successivi)
     sendBtn.addEventListener('click', sendMessage);
     userInput.addEventListener('keypress', (event) => {
         if (event.key === 'Enter') {
@@ -42,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (messageText === '') return;
 
         addUserMessage(messageText);
+
         // Aggiungi alla cronologia PRIMA di inviare
         chatHistory.push({ role: 'user', text: messageText }); 
         userInput.value = '';
@@ -49,11 +48,9 @@ document.addEventListener('DOMContentLoaded', () => {
         addBotMessage("sta scrivendo...", true);
 
         try {
-            // Chiama il backend con il messaggio e la cronologia (vuota la prima volta DOPO il msg utente)
             const response = await fetch('/.netlify/functions/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // Invia la cronologia AGGIORNATA che include l'ultimo messaggio utente
                 body: JSON.stringify({ message: messageText, history: chatHistory, userId: userId }), 
             });
 
@@ -62,8 +59,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             removeTypingIndicator();
             addBotMessage(data.reply);
-            // Aggiungi la risposta del bot alla cronologia
-            chatHistory.push({ role: 'model', text: data.reply }); 
+
+            // ✅ Ruolo corretto 'assistant' per Gemini
+            chatHistory.push({ role: 'assistant', text: data.reply }); 
 
         } catch (error) {
             console.error("Errore:", error);
@@ -72,7 +70,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Funzioni helper (rimangono invariate)
     function addUserMessage(message) {
         const el = document.createElement('div');
         el.className = 'chat-message user-message';
@@ -80,6 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chatMessages.appendChild(el);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
+
     function addBotMessage(message, isTyping = false) {
         message = message.replace('[ASK_EMAIL]', '').trim();
         const el = document.createElement('div');
@@ -89,6 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chatMessages.appendChild(el);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
+
     function removeTypingIndicator() {
         const indicator = chatMessages.querySelector('.typing-indicator');
         if (indicator) chatMessages.removeChild(indicator);
