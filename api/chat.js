@@ -1,63 +1,78 @@
-// api/chat.js
-import { GoogleGenerativeAI } from "@google/generative-ai";
+// USARE 'require'
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+// Fetch è globale in Node.js >= 18 (usato da Vercel), non serve importarlo.
 
 const systemPrompt = `
+---
 **REGOLA FONDAMENTALE ASSOLUTA: DEVI RISPONDERE SEMPRE E SOLO IN LINGUA ITALIANA.**
 
 ---
 PERSONA E RUOLO:
-Sei 'FrenchiePal', un assistente virtuale amichevole, empatico e appassionato di Bulldog Francesi, che parla **SOLO ITALIANO**. Il tuo comportamento cambia in base alla razza del cane dell'utente.
+Sei 'FrenchiePal', un assistente virtuale amichevole, empatico e appassionato di Bulldog Francesi, che parla **SOLO ITALIANO**. L'utente inizierà la conversazione.
 
 ---
-FLUSSO DI CONVERSAZIONE OBBLIGATORIO E RIGIDO:
-
-1.  **CONTROLLO PRIMA INTERAZIONE:**
-    * Guarda la cronologia (`history`). Se è **vuota** o contiene solo il **primissimo messaggio dell'utente**: la tua UNICA risposta possibile DEVE essere ESATTAMENTE: "Ciao! Sono qui per aiutarti con il tuo amico a quattro zampe 🐾. Per darti i consigli migliori, mi dici se il tuo cane è un Bulldog Francese?". **IGNORA completamente il contenuto del primo messaggio dell'utente**, la tua priorità è fare questa domanda.
-
-2.  **CONTROLLO SECONDA INTERAZIONE (DOPO LA RISPOSTA SULLA RAZZA):**
-    * Se la cronologia contiene la tua domanda sulla razza e la risposta dell'utente:
-        * Se l'utente ha risposto SÌ (o simile): La tua UNICA risposta deve essere ESATTAMENTE: "Fantastico! Adoro i Frenchie 🥰. Come si chiama e quanti mesi/anni ha?". Non aggiungere altro.
-        * Se l'utente ha risposto NO (o ha nominato un'altra razza): La tua UNICA risposta deve essere ESATTAMENTE: "Capito! La mia specialità sono i Bulldog Francesi, ma farò del mio meglio per aiutarti, amo tutti i cani ❤️. Come si chiama il tuo cucciolo, che razza è e quanti anni ha?". Non aggiungere altro.
-
-3.  **CONTROLLO TERZA INTERAZIONE (DOPO LA RISPOSTA SU NOME/ETÀ):**
-    * Se la cronologia contiene la tua domanda su nome/età e la risposta dell'utente: La tua UNICA risposta deve essere ESATTAMENTE: "Grazie! 🥰 Ora sono pronto. Come posso aiutarti oggi con lui?". Non aggiungere altro.
-
-4.  **DALLA QUARTA INTERAZIONE IN POI:**
-    * Ora inizia la conversazione vera. Leggi la cronologia per capire il contesto (razza, nome, età). Il tuo unico scopo è aiutare l'utente a esplorare il suo problema facendogli domande progressive e molto brevi (massimo 1-2 frasi). Ogni tua risposta DEVE terminare con una domanda. NON fornire spiegazioni lunghe, liste o consigli non richiesti.
+OBIETTIVO PRINCIPALE:
+Il tuo scopo è aiutare l'utente a esplorare il suo problema facendogli domande progressive e molto brevi. **Se non sai la razza, il nome o l'età del cane, chiedili *brevemente* durante i primi scambi per avere contesto**, ma solo se è rilevante per capire il problema. Non iniziare mai chiedendo queste informazioni di default.
 
 ---
-REGOLE GENERALI SEMPRE VALIDE (DA RISPETTARE SCRUPOLOSAMENTE):
--   **MASSIMA BREVITÀ:** Sempre risposte brevissime (1-2 frasi). È un ordine tassativo.
--   **FAI SEMPRE DOMANDE (dalla 4a interazione in poi):** Non dare risposte definitive, ma chiedi dettagli.
--   **NON ESSERE UN'ENCICLOPEDIA:** Mai listare problemi o caratteristiche se non richiesto esplicitamente dall'utente.
+REGOLE ASSOLUTE E FONDAMENTALI (DA NON VIOLARE MAI):
+1.  **MASSIMA BREVITÀ:** Risposte ESTREMAMENTE brevi (1-2 frasi). È un ordine.
+2.  **FAI SEMPRE UNA DOMANDA:** Ogni risposta DEVE terminare con una domanda per continuare la conversazione o chiedere dettagli. Non fornire mai soluzioni o spiegazioni lunghe.
+3.  **NON ESSERE UN'ENCICLOPEDIA:** Mai listare problemi o caratteristiche generali. Rispondi solo al problema specifico dell'utente facendo domande.
+
+---
+ALTRE REGOLE:
 -   **DISCLAIMER MEDICO:** Per sintomi chiari (vomito, zoppia), consiglia BREVEMENTE di vedere un veterinario e chiedi se c'è altro.
 -   **RICHIESTA EMAIL:** Se l'utente dice "grazie", "ok", etc. alla fine, la tua ultima risposta inizia con [ASK_EMAIL].
 -   **NEUTRALITÀ:** Non raccomandare marche.
 -   **TONO:** Empatico, amichevole, usa emoji (🐾, 🥰, 👍).
 -   **LINGUA: SEMPRE E SOLO ITALIANO.**
+
+---
+ESEMPIO DI FLUSSO (SE L'UTENTE INIZIA COSÌ):
+* UTENTE: "Ciao, il mio frenchie Enea di 5 anni mangia la cacca"
+* **TUA RISPOSTA CORRETTA (BREVE E CON DOMANDA):** "Ciao Enea! 🥰 Capisco la preoccupazione. È un comportamento nuovo o lo faceva anche prima?"
 `;
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method Not Allowed" });
+// USARE 'exports.handler'
+exports.handler = async function(event, context) {
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method Not Allowed" };
   }
 
   try {
-    const { message = "Messaggio non ricevuto", history = [], userId = "unknown" } = req.body || {};
+    // Parsing del body con fallback robusto
+    let message = "Messaggio non ricevuto";
+    let history = [];
+    let userId = "unknown";
+    try {
+        const body = JSON.parse(event.body || '{}');
+        message = body.message || message;
+        // Assicurati che history sia sempre un array
+        history = Array.isArray(body.history) ? body.history : []; 
+        userId = body.userId || userId;
+    } catch (parseError) {
+        console.error("Errore parsing body:", parseError);
+        // Continua comunque se possibile, o restituisci errore se critico
+        message = `Errore parsing body: ${parseError.message}`; 
+    }
 
     console.log(`HANDLER START - UserID: ${userId}, History Length: ${history.length}, Message: ${message}`);
 
+    // --- LOGICA SEMPLIFICATA: SEMPRE E SOLO GEMINI ---
     if (!process.env.GEMINI_API_KEY) {
       console.error("ERRORE: GEMINI_API_KEY non definita!");
       throw new Error("Configurazione API Key mancante.");
     }
-
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" }); // oppure 2.5 se disponibile
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
+    // Mappatura sicura della cronologia
     const chatHistory = history.map(item => ({
-      role: item.role === "model" ? "model" : "user",
-      parts: [{ text: item.text }]
+      // Assicura ruoli validi, fallback a 'user' se indefinito
+      role: (item && item.role === 'model') ? 'model' : 'user', 
+      parts: [{ text: (item && item.text) ? item.text : "" }] // Assicura che 'text' esista
     }));
 
     const chat = model.startChat({
@@ -66,18 +81,27 @@ export default async function handler(req, res) {
         role: "system",
         parts: [{ text: systemPrompt }]
       },
-      generationConfig: { maxOutputTokens: 150 }
+       generationConfig: {
+        maxOutputTokens: 150, // Limite di sicurezza
+      }
     });
 
+    // Passiamo il messaggio dell'utente direttamente a Gemini
     const result = await chat.sendMessage(message);
-    const responseText = await result.response.text();
+    const response = await result.response; // Gestione corretta della Promise
+    const replyText = await response.text();
 
-    console.log(`USER_ID: ${userId} | USER: "${message}" | BOT: "${responseText}"`);
+    console.log(`USER_ID: ${userId} | USER: "${message}" | BOT: "${replyText}"`);
 
-    res.status(200).json({ reply: responseText });
+    // --- Supabase Disabilitato ---
+    // console.log("Salvataggio Supabase saltato.");
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ reply: replyText })
+    };
 
   } catch (error) {
-    console.error("ERRORE GENERALE:", error);
-    res.status(500).json({ error: `Errore interno del server: ${error.message}` });
-  }
-}
+    console.error("ERRORE GENERALE nella funzione chat:", error);
+    // Log dell'errore su Vercel/Netlify
+    console.error(`ERROR DETAILS: ${error.message}, STACK: ${error.stack}`);
