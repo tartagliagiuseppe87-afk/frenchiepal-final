@@ -1,48 +1,30 @@
 // ==============================
-// FRENCHIEPAL CHAT HANDLER v2
+// FRENCHIEPAL CHAT HANDLER v3
 // ==============================
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// ==============================
-// PROMPT DI SISTEMA
-// ==============================
 const systemPrompt = `
 PERSONA E CONTESTO:
-Sei 'FrenchiePal', assistente virtuale e grande appassionato di Bulldog Francesi. 
-La conversazione è già iniziata e l'utente ti ha già fornito le informazioni di base sul suo cane (razza, nome, età). 
-Il tuo compito è continuare la conversazione da questo punto in poi.
+Sei 'FrenchiePal', assistente virtuale e grande appassionato di Bulldog Francesi.
+La conversazione è già iniziata e l'utente ti ha già fornito le informazioni di base sul suo cane (razza, nome, età).
 
-Se il cane è un Bulldog Francese, agisci come 'FrenchieFriend', l'amico super esperto. 
+Se il cane è un Bulldog Francese, agisci come 'FrenchieFriend'.
 Se è un'altra razza, agisci come un assistente generale che ama tutti i cani.
 
 ---
-OBIETTIVO PRINCIPALE:
-Il tuo unico scopo è aiutare l'utente a esplorare il suo problema facendogli domande progressive e molto brevi, 
-usando la tua conoscenza del contesto per fare domande pertinenti.
-
+OBIETTIVO:
+Aiutare l'utente a esplorare il suo problema con domande brevi e pertinenti.
 ---
-REGOLE ASSOLUTE E FONDAMENTALI:
-1. MASSIMA BREVITÀ: risposte estremamente brevi (max 2 frasi).
-2. FAI SEMPRE UNA DOMANDA: ogni risposta termina con una domanda.
-3. NON ESSERE UN'ENCICLOPEDIA: non elencare problemi comuni o caratteristiche della razza se non richiesto.
-
----
-ALTRE REGOLE:
-- DISCLAIMER MEDICO: per sintomi evidenti consiglia solo di contattare il veterinario.
-- RICHIESTA EMAIL: quando la conversazione finisce, la risposta deve iniziare con [ASK_EMAIL].
-- NEUTRALITÀ SU PRODOTTI: mai raccomandare marche.
-- TONO: empatico, amichevole, con emoji (🐾, 🥰, 👍).
-- LINGUA: sempre italiano.
-
----
-ESEMPI DI STILE:
-* UTENTE: "Si chiama Enea, ha 5 anni"
-* RISPOSTA CORRETTA: "Ciao Enea! 🥰 Un'età splendida. C'è qualcosa in particolare che ti preoccupa o di cui vuoi parlare oggi?"
+REGOLE:
+1. Risposte brevi (max 2 frasi).
+2. Ogni messaggio termina con una domanda.
+3. Nessun elenco informativo o spiegazione lunga.
+4. Usa emoji (🐾, 🥰, 👍).
+5. Italiano solo.
+6. Se l'utente parla di sintomi o salute → consiglia di rivolgersi al veterinario.
+7. Se la conversazione finisce → inizia la risposta con [ASK_EMAIL].
 `;
 
-// ==============================
-// HANDLER PRINCIPALE
-// ==============================
 export async function handler(event, context) {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
@@ -52,73 +34,84 @@ export async function handler(event, context) {
     const { message, history = [] } = JSON.parse(event.body);
     const msgLower = message.toLowerCase();
 
-    // Trova l'ultimo messaggio utente
-    const lastUserMsg = [...history].reverse().find(msg => msg.role === "user") || {};
+    // === Stato corrente (salvato nell’ultimo messaggio di sistema, se esiste)
+    let currentState = "ASK_BREED";
+    const stateMsg = history.find(m => m.role === "system" && m.state);
+    if (stateMsg) currentState = stateMsg.state;
 
-    // ==============================
-    // 1️⃣ INIZIO CHAT
-    // ==============================
+    // Helper per aggiungere nuovo stato al flusso
+    const withState = (reply, nextState) => ({
+      reply,
+      system: { role: "system", state: nextState }
+    });
+
+    // === 1️⃣ Avvio conversazione
     if (message === "INITIATE_CHAT") {
-      const firstQuestion = "Ciao! 🐾 Posso chiederti se il tuo cane è un Bulldog Francese?";
-      return { statusCode: 200, body: JSON.stringify({ reply: firstQuestion }) };
+      return {
+        statusCode: 200,
+        body: JSON.stringify(
+          withState("Ciao! 🐾 Posso chiederti se il tuo cane è un Bulldog Francese?", "ASK_BREED")
+        )
+      };
     }
 
-    // ==============================
-    // 2️⃣ RISPOSTA ALLA DOMANDA SULLA RAZZA
-    // ==============================
-    if (history.length === 1 && lastUserMsg.text) {
+    // === 2️⃣ Domanda sulla razza
+    if (currentState === "ASK_BREED") {
       const isFrenchie =
         msgLower.includes("sì") ||
         msgLower.includes("si") ||
-        msgLower.includes("yes") ||
         msgLower.includes("french");
       const reply = isFrenchie
         ? "Fantastico! 🥰 Come si chiama e quanti anni ha?"
         : "Capito! ❤️ Come si chiama e quanti anni ha il tuo cucciolo?";
-      return { statusCode: 200, body: JSON.stringify({ reply }) };
+      return {
+        statusCode: 200,
+        body: JSON.stringify(withState(reply, "ASK_NAME_AGE"))
+      };
     }
 
-    // ==============================
-    // 3️⃣ RISPOSTA SU NOME ED ETÀ (fix anti-loop)
-    // ==============================
-    const hasAlreadyAskedHelp = history.some(
-      h => h.text && h.text.toLowerCase().includes("come posso aiutarti")
-    );
-
-    if (history.length >= 2 && lastUserMsg.text && !hasAlreadyAskedHelp) {
+    // === 3️⃣ Domanda su nome ed età
+    if (currentState === "ASK_NAME_AGE") {
       const reply = "Grazie! 🐾 Come posso aiutarti oggi con lui?";
-      return { statusCode: 200, body: JSON.stringify({ reply }) };
+      return {
+        statusCode: 200,
+        body: JSON.stringify(withState(reply, "ASK_HELP"))
+      };
     }
 
-    // ==============================
-    // 4️⃣ TUTTO IL RESTO: PASSA AL MODELLO GEMINI
-    // ==============================
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    // === 4️⃣ Inizio conversazione vera con Gemini
+    if (currentState === "ASK_HELP" || currentState === "IN_CONVERSATION") {
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    // Conversione della history nel formato Gemini
-    const chatHistory = history.map(item => ({
-      role: item.role,
-      parts: [{ text: item.text }]
-    }));
+      // Ricostruzione della chat senza stati
+      const cleanHistory = history
+        .filter(m => m.role !== "system")
+        .map(item => ({
+          role: item.role,
+          parts: [{ text: item.text }]
+        }));
 
-    const chat = model.startChat({
-      history: chatHistory,
-      systemInstruction: {
-        role: "system",
-        parts: [{ text: systemPrompt }]
-      }
-    });
+      const chat = model.startChat({
+        history: cleanHistory,
+        systemInstruction: { role: "system", parts: [{ text: systemPrompt }] }
+      });
 
-    // Invio del messaggio corrente
-    const result = await chat.sendMessage(message);
-    const responseText = await result.response.text();
+      const result = await chat.sendMessage(message);
+      const responseText = await result.response.text();
 
-    console.log(`USER: "${message}" | BOT: "${responseText}"`);
+      console.log(`USER: "${message}" | BOT: "${responseText}"`);
 
+      return {
+        statusCode: 200,
+        body: JSON.stringify(withState(responseText, "IN_CONVERSATION"))
+      };
+    }
+
+    // Fallback
     return {
       statusCode: 200,
-      body: JSON.stringify({ reply: responseText })
+      body: JSON.stringify(withState("Ops, non ho capito bene. 🐾 Puoi ripetere?", "ASK_HELP"))
     };
 
   } catch (error) {
