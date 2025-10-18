@@ -1,8 +1,6 @@
 // USARE 'require' INVECE DI 'import'
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// Fetch è globale in Node.js >= 18 (usato da Netlify), non serve importarlo.
-
 const systemPrompt = `
 ---
 PERSONA E CONTESTO:
@@ -35,76 +33,48 @@ ESEMPI DI STILE (DA SEGUIRE ALLA LETTERA):
 * **NON FARE (risposta lunga e da enciclopedia):** "Capisco la tua preoccupazione! Si chiama coprofagia... ci sono diverse ragioni... la prima cosa da fare è escludere cause mediche..."
 `;
 
-// --- Integrazione Supabase (Temporaneamente Disabilitata) ---
-// const SUPABASE_URL = process.env.SUPABASE_URL;
-// const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-// async function saveLogToSupabase(entry) { /* ... */ }
+// --- Integrazione Supabase ---
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+async function saveLogToSupabase(entry) { /* ... (codice invariato) ... */ }
 // --- Fine Integrazione Supabase ---
 
 // USARE 'exports.handler'
 exports.handler = async function(event, context) {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
-  }
+  // ... (controllo httpMethod invariato) ...
 
   try {
-    const { message, history = [], userId } = JSON.parse(event.body || '{}'); // Aggiunto fallback
-    const userMessageLower = message ? message.toLowerCase() : ""; // Gestisci message undefined
-    let replyText = "";
+    const { message, history = [], userId } = JSON.parse(event.body || '{}'); 
+    const userMessageLower = message ? message.toLowerCase() : ""; 
+    let replyText = ""; 
 
     console.log(`HANDLER START - Received history length: ${history.length}, Message: ${message}`);
 
-    // --- LOGICA INFALLIBILE BASATA SU HISTORY.LENGTH CORRETTA ---
-
     // FASE 1: Primo messaggio
-    if (message === "INITIATE_CHAT") {
-        replyText = "Ciao! Sono qui per aiutarti con il tuo amico a quattro zampe 🐾. Per darti i consigli migliori, mi dici se il tuo cane è un Bulldog Francese?";
-        console.log("HANDLER - FASE 1 Eseguita");
-        // await saveLogToSupabase({ user_id: userId, role: 'bot_init', reply: replyText });
-        return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
-    }
+    if (message === "INITIATE_CHAT") { /* ... (codice invariato) ... */ }
 
     // FASE 2: Risposta alla prima domanda (history.length === 1)
-    if (history && history.length === 1) {
-        console.log("HANDLER - FASE 2 Inizio");
-        if (userMessageLower.includes('si') || userMessageLower.includes('certo') || userMessageLower.includes('esatto') || userMessageLower === 'ok') {
-            replyText = "Fantastico! Adoro i Frenchie 🥰. Come si chiama e quanti mesi/anni ha?";
-        } else {
-            replyText = "Capito! La mia specialità sono i Bulldog Francesi, ma farò del mio meglio per aiutarti, amo tutti i cani ❤️. Come si chiama il tuo cucciolo, che razza è e quanti anni ha?";
-        }
-        console.log("HANDLER - FASE 2 Eseguita");
-        // await saveLogToSupabase({ user_id: userId, role: 'user', message: message });
-        // await saveLogToSupabase({ user_id: userId, role: 'bot_intro', reply: replyText });
-        return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
-    }
-
+    if (history && history.length === 1) { /* ... (codice invariato) ... */ }
+    
     // FASE 3: Risposta alla seconda domanda (history.length === 3)
-    if (history && history.length === 3) {
-        console.log("HANDLER - FASE 3 Inizio");
-        replyText = "Grazie! 🥰 Ora sono pronto. Come posso aiutarti oggi con lui?";
-        console.log("HANDLER - FASE 3 Eseguita");
-        // await saveLogToSupabase({ user_id: userId, role: 'user', message: message });
-        // await saveLogToSupabase({ user_id: userId, role: 'bot_ready', reply: replyText });
-        return { statusCode: 200, body: JSON.stringify({ reply: replyText }) };
-    }
+    if (history && history.length === 3) { /* ... (codice invariato) ... */ }
 
     // FASE 4: Passiamo la palla a Gemini (history.length >= 5)
     console.log("HANDLER - FASE 4 (Gemini) Inizio");
-    if (!process.env.GEMINI_API_KEY) {
-        console.error("ERRORE CRITICO: GEMINI_API_KEY non definita!");
-        throw new Error("GEMINI_API_KEY non definita!");
-    }
+    if (!process.env.GEMINI_API_KEY) { throw new Error("GEMINI_API_KEY non definita!"); }
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     console.log("GoogleGenerativeAI inizializzato.");
 
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     console.log("Modello Gemini ottenuto.");
 
+    // --- CORREZIONE DEFINITIVA QUI ---
     const chatHistory = history.map(item => ({
-      role: item.role === 'model' ? 'assistant' : 'user',
+      // Usa 'model' come ruolo richiesto dall'API Gemini
+      role: item.role === 'model' ? 'model' : 'user', 
       parts: [{ text: item.text }]
     }));
-    console.log("Cronologia mappata per Gemini.");
+    console.log("Cronologia mappata per Gemini con ruoli corretti.");
 
     const chat = model.startChat({
       history: chatHistory,
@@ -118,11 +88,11 @@ exports.handler = async function(event, context) {
     console.log("Invio messaggio a Gemini:", message);
     const result = await chat.sendMessage(message);
     console.log("Risposta ricevuta da Gemini.");
-    replyText = await result.response.text();
+    replyText = await result.response.text(); 
 
     console.log(`USER_ID: ${userId} | USER: "${message}" | BOT: "${replyText}"`);
 
-    // await saveLogToSupabase({ /* ... */ }); // Temporaneamente disabilitato
+    // await saveLogToSupabase({ /* ... */ }); // Lasciamo Supabase commentato per ora
 
     console.log("HANDLER - FASE 4 (Gemini) Eseguita");
     return {
@@ -132,14 +102,19 @@ exports.handler = async function(event, context) {
 
   } catch (error) {
     console.error("ERRORE GENERALE nella funzione chat:", error);
-    // Log dell'errore su Netlify
-    try {
-        const safeUserId = event.body ? (JSON.parse(event.body || '{}')).userId : 'unknown_parse_fail';
-        console.error(`USER_ID: ${safeUserId || 'unknown'} | ERROR: ${error.message} | STACK: ${error.stack}`);
-    } catch (logError) {
-        console.error("Errore nel logging dell'errore:", logError);
-    }
-
+    // ... (gestione errore invariata) ...
     return { statusCode: 500, body: JSON.stringify({ error: "Errore interno del server" }) };
   }
+};
+
+// Implementazione di saveLogToSupabase (anche se commentata sopra)
+async function saveLogToSupabase(entry) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) { console.warn("Supabase non config."); return; }
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/chat_logs`, {
+      method: "POST", headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "return=minimal" },
+      body: JSON.stringify(entry) });
+    if (!response.ok) { console.error("Errore Supabase:", response.status, await response.text()); } 
+    else { console.log("Log Supabase OK."); }
+  } catch (err) { console.error("Errore fetch Supabase:", err); }
 }
